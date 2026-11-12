@@ -5,6 +5,8 @@
 
 static GtkTextBuffer *buf;
 static void (*on_hunk)(int from, int to);
+static void (*on_menu)(GtkMenu *m, int hunk);
+static int at = -1;
 static const char *tags[][2] = {
 	{"head", "#57c"},
 	{"@", "#888"},
@@ -12,20 +14,39 @@ static const char *tags[][2] = {
 	{"-", "#d33"},
 };
 
+static int line(GtkTextView *w, GdkEventButton *ev, GtkTextIter *a)
+{
+	int x, y;
+	gtk_text_view_window_to_buffer_coords(w, GTK_TEXT_WINDOW_TEXT, ev->x, ev->y, &x, &y);
+	gtk_text_view_get_iter_at_location(w, a, x, y);
+	gtk_text_iter_set_line_offset(a, 0);
+	return gtk_text_iter_get_line(a);
+}
+
 static gboolean click(GtkTextView *w, GdkEventButton *ev)
 {
 	GtkTextIter a, b;
-	int x, y;
+	int l;
 	if (ev->button == 1 && on_hunk && !gtk_text_buffer_get_selection_bounds(buf, &a, &b)) {
-		gtk_text_view_window_to_buffer_coords(w, GTK_TEXT_WINDOW_TEXT, ev->x, ev->y, &x, &y);
-		gtk_text_view_get_iter_at_location(w, &a, x, y);
-		gtk_text_iter_set_line_offset(&a, 0);
-		if (gtk_text_iter_get_char(&a) == '@') on_hunk(gtk_text_iter_get_line(&a), -1);
+		l = line(w, ev, &a);
+		if (gtk_text_iter_get_char(&a) == '@') on_hunk(l, -1);
 	}
 	return FALSE;
 }
 
-GtkWidget *diff_view(void (*hunk)(int from, int to))
+static gboolean press(GtkTextView *w, GdkEventButton *ev)
+{
+	GtkTextIter a;
+	if (ev->button == 3) for (at = line(w, ev, &a); at >= 0 && gtk_text_iter_get_char(&a) != '@'; gtk_text_iter_backward_line(&a)) at--;
+	return FALSE;
+}
+
+static void popup(GtkTextView *w, GtkWidget *m)
+{
+	if (on_menu && GTK_IS_MENU(m)) on_menu(GTK_MENU(m), at);
+}
+
+GtkWidget *diff_view(void (*hunk)(int from, int to), void (*menu)(GtkMenu *m, int hunk))
 {
 	GtkWidget *s = gtk_scrolled_window_new(0, 0), *v = gtk_text_view_new();
 	int i;
@@ -34,7 +55,10 @@ GtkWidget *diff_view(void (*hunk)(int from, int to))
 	gtk_text_view_set_monospace(GTK_TEXT_VIEW(v), TRUE);
 	for (i = 0; i < 4; i++) gtk_text_buffer_create_tag(buf, tags[i][0], "foreground", tags[i][1], NULL);
 	on_hunk = hunk;
+	on_menu = menu;
 	g_signal_connect(v, "button-release-event", G_CALLBACK(click), 0);
+	g_signal_connect(v, "button-press-event", G_CALLBACK(press), 0);
+	g_signal_connect(v, "populate-popup", G_CALLBACK(popup), 0);
 	gtk_container_add(GTK_CONTAINER(s), v);
 	return s;
 }
@@ -58,11 +82,12 @@ void diff_show(const char *text)
 	}
 }
 
-void diff_lines(int *from, int *to)
+int diff_lines(int *from, int *to)
 {
 	GtkTextIter a, b;
-	gtk_text_buffer_get_selection_bounds(buf, &a, &b);
+	int r = gtk_text_buffer_get_selection_bounds(buf, &a, &b);
 	*from = gtk_text_iter_get_line(&a);
 	*to = gtk_text_iter_get_line(&b) - (gtk_text_iter_starts_line(&b) && !gtk_text_iter_equal(&a, &b));
+	return r;
 }
 

@@ -23,8 +23,12 @@ a message box and a Commit button below.
 - Double-click a file to stage or unstage it.
 - Click a section title to collapse or open the section.
 - Click a hunk header (`@@ ...`) to stage or unstage that hunk.
-- Select lines in the diff and press Stage lines / Unstage lines to move only those changes.
-  With no selection the button moves the line under the cursor.
+- Right-click the diff for more:
+  Stage or Unstage hunk (the hunk under the pointer),
+  Stage or Unstage lines (the selected lines),
+  Revert hunk and Revert lines (in Unstaged only, asks first),
+  More context and Less context.
+  Ctrl+C copies the selected text.
 - Amend loads the last message and commits with `--amend`.
   While Amend is on, Staged also shows the changes of the last commit.
   Unstage a file, hunk or line to take it out of the last commit.

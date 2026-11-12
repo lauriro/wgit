@@ -11,11 +11,13 @@ static GtkTreeStore *store;
 static const char *head[] = {"Staged", "Unstaged", "Untracked"}, *arrow[] = {"pan-down-symbolic", "pan-end-symbolic"};
 static const char *verb[] = {"Stage", "Unstage", "Revert", "Ignore"}, *ask[][2] = {
 	{"Revert changes in %d file%s?", "_Revert"},
-	{"Delete %d untracked file%s?", "_Delete"}
+	{"Delete %d untracked file%s?", "_Delete"},
+	{"Revert this hunk in %s?", "_Revert"},
+	{"Revert the selected lines in %s?", "_Revert"}
 };
 static const char use[] = {6, 1, 6, 4};
 static Entry *ent;
-static int nent, sec, busy, sorted, shut[3], geo[] = {1000, 700, 300, 0};
+static int nent, sec, busy, sorted, hunk, shut[3], geo[] = {1000, 700, 300, 0};
 static char *cur, *text, *conf;
 
 static void set(GtkTreeIter *it, char *m, int i, const char *icon, int n)
@@ -117,6 +119,18 @@ static gboolean can(GtkTreeSelection *s, GtkTreeModel *m, GtkTreePath *p, gboole
 	return r;
 }
 
+static int sure(char *q, const char *yes)
+{
+	GtkWidget *d = gtk_message_dialog_new(GTK_WINDOW(win), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_CANCEL, "%s", q);
+	int r;
+	g_free(q);
+	gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(d), "This cannot be undone.");
+	gtk_dialog_add_button(GTK_DIALOG(d), yes, GTK_RESPONSE_ACCEPT);
+	r = gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT;
+	gtk_widget_destroy(d);
+	return r;
+}
+
 static void skip(Entry **e, int n)
 {
 	GtkWidget *d = gtk_dialog_new_with_buttons("Ignore", GTK_WINDOW(win), GTK_DIALOG_MODAL, "_Cancel", GTK_RESPONSE_CANCEL, "_Ignore", GTK_RESPONSE_ACCEPT, NULL);
@@ -150,10 +164,9 @@ static void run(GtkWidget *w, gpointer k)
 {
 	GtkTreeModel *m;
 	GtkTreeIter it;
-	GtkWidget *d;
 	GList *l = gtk_tree_selection_get_selected_rows(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), &m), *p;
 	Entry **e = malloc(g_list_length(l) * sizeof *e + 1);
-	int i, n = 0, op = GPOINTER_TO_INT(k), r = GTK_RESPONSE_ACCEPT;
+	int i, n = 0, op = GPOINTER_TO_INT(k);
 	char *o;
 	for (p = l; p; p = p->next) {
 		gtk_tree_model_get_iter(m, &it, p->data);
@@ -162,14 +175,7 @@ static void run(GtkWidget *w, gpointer k)
 	}
 	g_list_free_full(l, (GDestroyNotify)gtk_tree_path_free);
 	if (n && op == 3) skip(e, n);
-	else if (n && op == 2) {
-		d = gtk_message_dialog_new(GTK_WINDOW(win), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_CANCEL, ask[sec > 1][0], n, n > 1 ? "s" : "");
-		gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(d), "This cannot be undone.");
-		gtk_dialog_add_button(GTK_DIALOG(d), ask[sec > 1][1], GTK_RESPONSE_ACCEPT);
-		r = gtk_dialog_run(GTK_DIALOG(d));
-		gtk_widget_destroy(d);
-	}
-	if (n && op < 3 && r == GTK_RESPONSE_ACCEPT) done(files(&o, op, e, n), &o);
+	else if (n && (op < 2 || sure(g_strdup_printf(ask[sec > 1][0], n, n > 1 ? "s" : ""), ask[sec > 1][1]))) done(files(&o, op, e, n), &o);
 	free(e);
 }
 
@@ -206,6 +212,36 @@ static void chosen(void)
 	int f, t;
 	diff_lines(&f, &t);
 	lines(f, t);
+}
+
+static void pick(GtkWidget *w, gpointer p)
+{
+	int k = GPOINTER_TO_INT(p), f = hunk, t = -1;
+	char *o;
+	if (k > 3) {
+		context = k > 4 ? MAX(1, context / 2) : 2 * context;
+		sel(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
+	} else {
+		if (k & 1) diff_lines(&f, &t);
+		if (k < 2 || sure(g_strdup_printf(ask[k][0], cur), ask[k][1])) done(apply(&o, text, f, t, k < 2 ? !sec : 2), &o);
+	}
+}
+
+static void menu(GtkMenu *m, int h)
+{
+	static const char *name[] = {"Stage hunk", "Stage lines", "Revert hunk", "Revert lines", "More context", "Less context", "Unstage hunk", "Unstage lines"};
+	GtkWidget *i;
+	int f, t, k, has = diff_lines(&f, &t);
+	hunk = h;
+	for (k = 0; k < 6; k++) {
+		if ((k == 2 || k == 3) && sec != 1) continue;
+		if (k == 0 || k == 4) gtk_menu_shell_append(GTK_MENU_SHELL(m), gtk_separator_menu_item_new());
+		i = gtk_menu_item_new_with_label(name[k < 2 && !sec ? k + 6 : k]);
+		gtk_widget_set_sensitive(i, k < 4 ? (k & 1 ? has : h >= 0) : k == 4 || context > 1);
+		g_signal_connect(i, "activate", G_CALLBACK(pick), GINT_TO_POINTER(k));
+		gtk_menu_shell_append(GTK_MENU_SHELL(m), i);
+	}
+	gtk_widget_show_all(GTK_WIDGET(m));
 }
 
 static void submit(void)
@@ -301,7 +337,7 @@ int cmd_commit(const char *path)
 		g_signal_connect(bar[k], "clicked", G_CALLBACK(run), GINT_TO_POINTER(k));
 	}
 	gtk_box_pack_start(GTK_BOX(l), scroll(list), TRUE, TRUE, 0);
-	gtk_box_pack_start(GTK_BOX(r), diff_view(lines), TRUE, TRUE, 0);
+	gtk_box_pack_start(GTK_BOX(r), diff_view(lines, menu), TRUE, TRUE, 0);
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), lbtn = gtk_button_new(), FALSE, FALSE, 0);
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);

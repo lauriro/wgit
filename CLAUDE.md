@@ -40,6 +40,8 @@ The binary goes into a desktop image later, so it is built against Debian testin
   The buffer holds the diff line for line, so a buffer line number is a diff line number.
   This is what lets a selection map straight onto `patch()`.
   A click on a line that starts with `@` calls the hunk callback with `(line, -1)`.
+  A right click adds to the text view menu through the menu callback,
+  with the header line of the hunk under the pointer, or -1.
 - `commit.c`: the commit window (`cmd_commit`).
 - `wgit.c`: the subcommand table and the prefix match.
 - `test.c`, `test.sh`: the test binary `wgit-test` and the script that drives it.
@@ -163,7 +165,6 @@ The window is still to be tried by the user on Wayland.
 
 ## Known limits
 
-- Hunks have no button of their own; the user clicks the `@@` header line.
 - A lone `\r` or a U+2029 in a diff line splits it into two buffer lines,
   so the line selection after it points at the wrong diff lines.
 - Unstaging part of a newly added file fails: git will not remove only part of a new file.
