@@ -284,7 +284,7 @@ int cmd_commit(const char *path)
 	gtk_box_pack_start(GTK_BOX(b), amend = gtk_check_button_new_with_label("Amend"), FALSE, FALSE, 0);
 	gtk_box_pack_end(GTK_BOX(b), c = gtk_button_new_with_label("Commit"), FALSE, FALSE, 0);
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
-	gtk_paned_pack1(GTK_PANED(pane[0]), l, FALSE, TRUE);
+	gtk_paned_pack1(GTK_PANED(pane[0]), l, FALSE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[0]), pane[1], TRUE, TRUE);
 	for (k = 0; k < 2; k++) if (geo[k + 2]) gtk_paned_set_position(GTK_PANED(pane[k]), geo[k + 2]);
 	gtk_container_add(GTK_CONTAINER(win), pane[0]);
