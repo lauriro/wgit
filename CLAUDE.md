@@ -174,7 +174,7 @@ The window is still to be tried by the user on Wayland.
 ## The user's rules
 
 - The shortest general code that does the job, no frameworks.
-  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 32,408 bytes.
+  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 36,632 bytes.
 - No comments that say what the code does; a rare comment says why.
 - Tabs for indentation.
 - Every file except JSON starts with an empty line and ends with an empty line.
