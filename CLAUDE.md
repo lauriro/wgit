@@ -22,9 +22,8 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
 - `wgit` alone prints the usage and exits 0; an unknown subcommand exits 1.
 - `wgit c` / `wgit commit [path]` opens the commit window, like gitg's commit view.
   Any unique prefix of a subcommand works.
-- `wgit l[og]` comes next: a history browser.
-  It reuses `diff-view.c` and `git.c`,
-  and draws the branch graph from `git log --graph` ASCII with cairo, one cell per character.
+- `wgit l` / `wgit log [path]` opens the history browser, gitk-like:
+  the graph of `git log --graph --all` at the left, the selected commit and its diff at the right.
 
 ## Files
 
@@ -53,6 +52,7 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   A right click adds to the text view menu through the menu callback,
   with the header line of the hunk under the pointer and the `+` or `-` line under it, each -1 if there is none.
 - `commit.c`: the commit window (`cmd_commit`).
+- `log.c`: the history window (`cmd_log`); it checks the signature of the selected commit only, as `%G?` for all rows is slow.
 - `ui.c`, `ui.h`: what every window shares: `window()` starts GTK, follows the desktop colour scheme (`theme()`)
   and restores the size and pane positions from a state file (`wgit` for commit, one name per window);
   `loop()` sets the panes, shows the window and saves the layout on close.

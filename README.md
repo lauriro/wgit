@@ -20,6 +20,8 @@ staged, unstaged and untracked files in one list on the left,
 the selected file's diff on the right,
 a message box and Cancel, Rescan and Commit buttons below.
 `wgit c <path>` works in the repo of that path.
+`wgit log` (or `wgit l`) shows the history: the graph of all branches at the left,
+the selected commit and its diff at the right.
 
 
 ## Commit window
@@ -85,6 +87,7 @@ and `test.sh` runs it against throwaway repos.
 - `git.c` runs git, parses the status and builds hunk and line patches. No GTK.
 - `diff-view.c` shows a diff, shared with a later `wgit log`.
 - `commit.c` is the commit window.
+- `log.c` is the history window.
 - `ui.c` is what all windows share: start, colour scheme and saved layout.
 - `wgit.c` picks the subcommand.
 
