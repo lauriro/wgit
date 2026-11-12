@@ -56,6 +56,9 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   with the header line of the hunk under the pointer and the `+` or `-` line under it, each -1 if there is none.
 - `commit.c`: the commit view (`commit_view()`).
 - `log.c`: the log view (`log_view()`); it checks the signature of the selected commit only, as `%G?` for all rows is slow.
+  The graph column is empty; after GTK draws the visible rows, `paint()` draws their graph cells with cairo
+  over the full row height, so lines join: `|` vertical, `/` and `\` to the next column in the row below,
+  `*` a dot with half lines to a `|` or `*` above and below. Colours go by column; a slash takes its right column.
 - `ui.c`, `ui.h`: the window. `app()` checks the repo, starts GTK, follows the desktop colour scheme (`theme()`),
   restores the window size and both views' pane positions from `~/.local/state/wgit` (six numbers)
   and shows a view in a `GtkStack`. `flip()` switches the view: it builds a view the first time and reloads it after.

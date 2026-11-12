@@ -6,11 +6,72 @@
 #include "git.h"
 #include "ui.h"
 
+enum { W = 7, PAD = 4 };
+
 static GtkWidget *list, *dv;
+static GtkTreeViewColumn *graph;
 static GtkListStore *store;
 static GtkTextBuffer *info;
 static Row *row;
 static char *text;
+static int nrow;
+static const char shape[] = "|/\\_-";
+static const double geom[][4] = {{0, 0, 0, 1}, {1, 0, -1, 1}, {-1, 0, 1, 1}, {-1, 1, 1, 1}, {-1, .5, 1, .5}};
+static const double pal[][3] = {{.29, .53, .91}, {.25, .68, .25}, {.88, .32, .32}, {.79, .64, .15}, {.75, .32, .75}, {.16, .65, .72}};
+
+static int at(int i, int k)
+{
+	return i >= 0 && i < nrow && k < (int)strlen(row[i].graph) ? row[i].graph[k] : 0;
+}
+
+static void colour(cairo_t *cr, int k)
+{
+	const double *c = pal[k / 2 % 6];
+	cairo_set_source_rgb(cr, c[0], c[1], c[2]);
+}
+
+static void stroke(cairo_t *cr, int k, double x1, double y1, double x2, double y2)
+{
+	colour(cr, k);
+	cairo_move_to(cr, x1, y1);
+	cairo_line_to(cr, x2, y2);
+	cairo_stroke(cr);
+}
+
+static gboolean paint(GtkTreeView *v, cairo_t *cr)
+{
+	GtkTreePath *a, *b;
+	GtkTreeIter it;
+	GdkRectangle r;
+	const char *p, *s;
+	const double *g;
+	int i, k, x, y, ch;
+	double cx, h;
+	if (!gtk_tree_view_get_visible_range(v, &a, &b)) return FALSE;
+	cairo_set_line_width(cr, 2);
+	for (; gtk_tree_path_compare(a, b) <= 0; gtk_tree_path_next(a)) {
+		gtk_tree_view_get_background_area(v, a, graph, &r);
+		gtk_tree_view_convert_bin_window_to_widget_coords(v, r.x, r.y, &x, &y);
+		gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &it, a);
+		gtk_tree_model_get(GTK_TREE_MODEL(store), &it, 1, &i, -1);
+		for (p = row[i].graph, h = r.height, k = 0; p[k]; k++) {
+			cx = x + PAD + k * W + W / 2;
+			if (p[k] == '*') {
+				if ((ch = at(i - 1, k)) == '|' || ch == '*') stroke(cr, k, cx, y, cx, y + h / 2);
+				if ((ch = at(i + 1, k)) == '|' || ch == '*') stroke(cr, k, cx, y + h / 2, cx, y + h);
+				colour(cr, k);
+				cairo_arc(cr, cx, y + h / 2, 3.5, 0, 2 * G_PI);
+				cairo_fill(cr);
+			} else if ((s = strchr(shape, p[k]))) {
+				g = geom[s - shape];
+				stroke(cr, k + (p[k] != '|'), cx + g[0] * W, y + g[1] * h, cx + g[2] * W, y + g[3] * h);
+			}
+		}
+	}
+	gtk_tree_path_free(a);
+	gtk_tree_path_free(b);
+	return FALSE;
+}
 
 static void pick(GtkTreeSelection *s)
 {
@@ -33,15 +94,18 @@ static void load(void)
 {
 	GtkTreePath *p;
 	char *m;
-	int i, n;
+	int i, k, w = 0;
 	gtk_list_store_clear(store);
-	row = history(&n);
-	for (i = 0; i < n; i++) {
+	row = history(&nrow);
+	for (i = 0; i < nrow; i++) {
+		k = strlen(row[i].graph);
+		if (k > w) w = k;
 		m = row[i].hash ? g_markup_printf_escaped("<span foreground=\"#c55\" font_family=\"monospace\">%s</span> %s  <span foreground=\"#4a4\">%s</span>  <span foreground=\"#39a\">%.16s</span>",
 			row[i].hash, row[i].subject, row[i].author, row[i].date) : g_strdup("");
 		gtk_list_store_insert_with_values(store, 0, -1, 0, m, 1, i, -1);
 		g_free(m);
 	}
+	gtk_tree_view_column_set_fixed_width(graph, 2 * PAD + w * W);
 	gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), p = gtk_tree_path_new_first(), 0, FALSE);
 	gtk_tree_path_free(p);
 }
@@ -56,6 +120,10 @@ GtkWidget *log_view(GtkWidget **pane)
 		return pane[0];
 	}
 	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_INT)));
+	graph = gtk_tree_view_column_new_with_attributes(0, gtk_cell_renderer_text_new(), NULL);
+	gtk_tree_view_column_set_sizing(graph, GTK_TREE_VIEW_COLUMN_FIXED);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(list), graph);
+	g_signal_connect_after(list, "draw", G_CALLBACK(paint), 0);
 	g_object_set(t = gtk_cell_renderer_text_new(), "ellipsize", PANGO_ELLIPSIZE_END, NULL);
 	col = gtk_tree_view_column_new_with_attributes(0, t, "markup", 0, NULL);
 	gtk_tree_view_column_set_sizing(col, GTK_TREE_VIEW_COLUMN_FIXED);
