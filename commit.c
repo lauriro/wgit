@@ -7,10 +7,10 @@
 
 static GtkWidget *win, *list, *fbtn, *lbtn, *amend;
 static GtkTextBuffer *msg;
-static GtkListStore *store;
+static GtkTreeStore *store;
 static const char *head[] = {"Staged", "Unstaged", "Untracked"};
 static Entry *ent;
-static int nent, side, busy;
+static int nent, side, busy, shut[3];
 static char *cur, *text;
 
 static Entry *find(void)
@@ -29,30 +29,34 @@ static void show(void)
 	gtk_button_set_label(GTK_BUTTON(lbtn), side ? "Unstage lines" : "Stage lines");
 }
 
-static void add(GtkTreeIter *it, char *m, const char *path, int k)
+static void set(GtkTreeIter *it, char *m, const char *path, int k)
 {
-	gtk_list_store_insert_with_values(store, it, -1, 0, m, 1, path, 2, k, -1);
+	gtk_tree_store_set(store, it, 0, m, 1, path, 2, k, -1);
 	g_free(m);
 }
 
 static void reload(void)
 {
-	GtkTreeIter it, hit;
+	GtkTreeIter it, hd, hit;
 	GtkTreePath *tp;
 	char c;
-	int i, k, s, any, hs = -1;
+	int i, k, s, n, hs = -1;
 	busy = 1;
 	ent = status(&nent);
-	gtk_list_store_clear(store);
+	gtk_tree_store_clear(store);
 	for (k = 0; k < 3; k++) {
-		add(&it, g_strdup_printf("<b>%s</b>", head[k]), 0, -1);
-		for (i = any = 0; i < nent; i++) {
+		gtk_tree_store_append(store, &hd, 0);
+		for (i = n = 0; i < nent; i++) {
 			if ((c = k ? ent[i].y : ent[i].x) == ' ' || (c == '?') != (k == 2)) continue;
-			add(&it, g_markup_printf_escaped("%c  %s", c, ent[i].path), ent[i].path, s = !k);
-			if (cur && !strcmp(cur, ent[i].path) && (hs < 0 || s == side)) hit = it, hs = s;
-			any = 1;
+			n++;
+			gtk_tree_store_append(store, &it, &hd);
+			set(&it, g_markup_printf_escaped("%c  %s", c, ent[i].path), ent[i].path, s = !k);
+			if (!shut[k] && cur && !strcmp(cur, ent[i].path) && (hs < 0 || s == side)) hit = it, hs = s;
 		}
-		if (!any) add(&it, g_strdup_printf("<span alpha=\"50%%\">No %c%s files</span>", head[k][0] | 32, head[k] + 1), 0, -1);
+		set(&hd, g_strdup_printf("<b>%s</b> <span alpha=\"50%%\">%d</span>", head[k], n), 0, -1 - k);
+		tp = gtk_tree_model_get_path(GTK_TREE_MODEL(store), &hd);
+		if (!shut[k]) gtk_tree_view_expand_row(GTK_TREE_VIEW(list), tp, FALSE);
+		gtk_tree_path_free(tp);
 	}
 	if (hs < 0) {
 		g_free(cur);
@@ -108,6 +112,14 @@ static void file(void)
 static void act(GtkTreeView *v, GtkTreePath *p)
 {
 	if (can(0, gtk_tree_view_get_model(v), p)) file();
+	else if (!gtk_tree_view_collapse_row(v, p)) gtk_tree_view_expand_row(v, p, FALSE);
+}
+
+static void fold(GtkTreeView *v, GtkTreeIter *it, GtkTreePath *p, gpointer c)
+{
+	int k;
+	gtk_tree_model_get(GTK_TREE_MODEL(store), it, 2, &k, -1);
+	shut[-1 - k] = GPOINTER_TO_INT(c);
 }
 
 static void lines(int from, int to)
@@ -175,12 +187,14 @@ int cmd_commit(const char *path)
 	win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title(GTK_WINDOW(win), top);
 	gtk_window_set_default_size(GTK_WINDOW(win), 1000, 700);
-	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store = gtk_list_store_new(3, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT)));
+	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store = gtk_tree_store_new(3, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT)));
 	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, gtk_cell_renderer_text_new(), "markup", 0, NULL);
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(list), FALSE);
 	gtk_tree_selection_set_select_function(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), (GtkTreeSelectionFunc)can, 0, 0);
 	g_signal_connect(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), "changed", G_CALLBACK(sel), 0);
 	g_signal_connect(list, "row-activated", G_CALLBACK(act), 0);
+	g_signal_connect(list, "row-collapsed", G_CALLBACK(fold), GINT_TO_POINTER(1));
+	g_signal_connect(list, "row-expanded", G_CALLBACK(fold), 0);
 	gtk_box_pack_start(GTK_BOX(r), diff_view(lines), TRUE, TRUE, 0);
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), fbtn = gtk_button_new(), FALSE, FALSE, 0);

@@ -12,6 +12,7 @@ a message box and a Commit button below.
 ## Use
 
 - Double-click a file, or press Stage file / Unstage file, to move the whole file.
+- Double-click a section title, or click its arrow, to collapse or open the section.
 - Click a hunk header (`@@ ...`) to stage or unstage that hunk.
 - Select lines in the diff and press Stage lines / Unstage lines to move only those changes.
   With no selection the button moves the line under the cursor.
