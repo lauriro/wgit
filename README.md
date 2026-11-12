@@ -32,6 +32,7 @@ a message box and a Commit button below.
 - Amend loads the last message and commits with `--amend`.
   While Amend is on, Staged also shows the changes of the last commit.
   Unstage a file, hunk or line to take it out of the last commit.
+- Cancel closes wgit without a commit.
 - Drag the line over the message box to make the box higher.
 - wgit remembers the window size and the pane positions in `~/.local/state/wgit`.
   It does not save the size of a maximized or fullscreen window.
@@ -39,7 +40,7 @@ a message box and a Commit button below.
 Keys:
 
 - `Ctrl+Enter` commits.
-- `F5` reloads the file lists.
+- `F5` reloads the file lists, as the Rescan button does.
 
 ## Build and test
 

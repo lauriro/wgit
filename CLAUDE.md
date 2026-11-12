@@ -159,7 +159,7 @@ At that size the file pane is 341 px wide; Stage, Unstage, Revert and Ignore are
 List rows are 23 px apart starting at y 57,
 so with nothing staged the first unstaged row is at y 103.
 Diff lines are 17 px apart starting at y 14,
-the message handle is at y 527, Amend at 360,676, Commit at 950,676.
+the message handle is at y 527, Amend at 360,676, Cancel, Rescan and Commit at 776, 861 and 950, y 676.
 In the diff menu, Stage hunk is 17 px and Stage lines 42 px below the right click.
 Read the PNGs with the Read tool to see them.
 The window is still to be tried by the user on Wayland.
