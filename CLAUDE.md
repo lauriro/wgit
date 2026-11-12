@@ -27,6 +27,10 @@ The binary goes into a desktop image later, so it is built against Debian testin
   and builds hunk and line patches for `git apply --cached [-R] -`.
   `files()` stages, unstages or reverts several files in one git run;
   revert checks out tracked files from the index and deletes untracked files with `git clean -f`.
+  When `base` is set (`parent()`: HEAD^, or the empty tree on a root commit),
+  the staged side compares the index with `base` instead of HEAD, for amend:
+  `status()` takes the staged letters from `git diff --cached --name-status base`,
+  `diff()` diffs against it and unstage resets to it.
   `GIT_LITERAL_PATHSPECS=1` is set for every git run, so names with `:` or `*` are plain paths.
 - `diff-view.c`, `diff-view.h`: the coloured diff view, shared by commit and the later log.
   The buffer holds the diff line for line, so a buffer line number is a diff line number.
@@ -67,8 +71,9 @@ podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build sh -c 'make && make test'
 `add|reset|revert FILE...` stages, unstages or reverts whole files;
 `stage|unstage FILE FROM [TO]` applies diff lines FROM..TO (0-based), or the hunk whose header is FROM;
 `commit MSG` commits.
+A first argument `amend` sets `base`, and then `commit` amends.
 
-The 21 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
+The 26 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
 
 1. stage hunk: the second hunk of a file with two hunks is staged.
 2. other hunk stays: the first hunk stays unstaged.
@@ -91,8 +96,13 @@ The 21 tests in `test.sh`, checked against the index with `git diff --cached` or
 19. revert files: a modified and a deleted file get their index content back.
 20. delete untracked: revert deletes an untracked file.
 21. revert keeps index: revert of a partly staged file keeps the staged hunk.
+22. amend status: a clean tree shows the last commit's file as staged in amend mode only.
+23. amend unstage hunk: one hunk of the last commit goes back to HEAD^.
+24. amend unstage file: the whole file goes back to HEAD^, the work tree keeps the changes.
+25. amend drops a change: the amended commit holds only the change still staged.
+26. amend root commit: on the first commit the file shows as added and unstages to untracked.
 
-The summary line is `21 passed, 0 failed`.
+The summary line is `26 passed, 0 failed`.
 
 ## Checking the window
 

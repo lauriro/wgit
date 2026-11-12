@@ -64,12 +64,33 @@ int git(char **out, const char *in, char **argv)
 	return st;
 }
 
+char *base;
+
+char *parent(void)
+{
+	char *s;
+	if (git(&s, 0, (char *[]){"git", "rev-parse", "-q", "--verify", "HEAD^", 0})) {
+		free(s);
+		git(&s, 0, (char *[]){"git", "hash-object", "-t", "tree", "/dev/null", 0});
+	}
+	s[strcspn(s, "\n")] = 0;
+	return s;
+}
+
+static int cmp(const void *a, const void *b)
+{
+	return strcmp(((const Entry *)a)->path, ((const Entry *)b)->path);
+}
+
 Entry *status(int *n)
 {
-	static char *s;
+	static char *s, *d;
 	static Entry *e;
-	char *p;
+	char *p, *q, *o;
+	int i;
 	free(s);
+	free(d);
+	d = 0;
 	if (git(&s, 0, (char *[]){"git", "status", "--porcelain=v1", "-z", "-uall", 0})) *s = 0;
 	for (*n = 0, p = s; *p; (*n)++) {
 		e = realloc(e, (*n + 1) * sizeof *e);
@@ -79,6 +100,27 @@ Entry *status(int *n)
 			e[*n].orig = p;
 			p += strlen(p) + 1;
 		}
+		if (base && e[*n].x != '?') {
+			e[*n].x = ' ';
+			e[*n].orig = 0;
+			if (e[*n].y == ' ') (*n)--;
+		}
+	}
+	if (base && !git(&d, 0, (char *[]){"git", "diff", "--cached", "--name-status", "-z", base, 0})) {
+		for (p = d; *p; p = q + strlen(q) + 1) {
+			q = p + strlen(p) + 1;
+			o = strchr("RC", *p) ? q : 0;
+			if (o) q += strlen(q) + 1;
+			for (i = 0; i < *n && strcmp(e[i].path, q); i++);
+			if (i == *n) {
+				e = realloc(e, ++*n * sizeof *e);
+				e[i].y = ' ';
+				e[i].path = q;
+			}
+			e[i].x = *p;
+			e[i].orig = o;
+		}
+		qsort(e, *n, sizeof *e, cmp);
 	}
 	return e;
 }
@@ -87,7 +129,7 @@ char *diff(Entry *e, int cached)
 {
 	char *s, *u = !cached && e->y == '?' ? "--no-index" : 0;
 	git(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff",
-		cached ? "--cached" : u ? u : "-p", "--", u ? "/dev/null" : e->path, e->path, 0});
+		cached ? "--cached" : u ? u : "-p", cached && base ? base : "-p", "--", u ? "/dev/null" : e->path, e->path, 0});
 	return s;
 }
 
@@ -163,10 +205,11 @@ int files(char **out, int op, Entry **e, int n)
 		{"git", "checkout", "-q", "--"},
 		{"git", "clean", "-fq", "--"}
 	};
-	char **a = malloc((2 * n + 5) * sizeof *a), **p = a + 4;
+	char **a = malloc((2 * n + 6) * sizeof *a), **p = a + 4;
 	int r;
 	op += op == 2 && e[0]->y == '?';
 	memcpy(a, cmd[op], sizeof *cmd);
+	if (op == 1 && base) a[3] = base, *p++ = "--";
 	for (; n--; e++) {
 		*p++ = (*e)->path;
 		if (op == 1 && (*e)->orig) *p++ = (*e)->orig;

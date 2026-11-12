@@ -3,7 +3,10 @@ typedef struct {
 	char x, y, *path, *orig;
 } Entry;
 
+extern char *base;
+
 int git(char **out, const char *in, char **argv);
+char *parent(void);
 char *repo(const char *path);
 Entry *status(int *n);
 char *diff(Entry *e, int cached);

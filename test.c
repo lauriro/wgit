@@ -7,12 +7,15 @@
 int main(int argc, char **argv)
 {
 	static const char *op[] = {"add", "reset", "revert"};
-	int i, j, n, k = 0, r = 0, rev = argc > 1 && *argv[1] == 'u';
+	int i, j, n, k = 0, r = 0, rev;
 	char *o = 0;
-	Entry *e = status(&n), **f = calloc(argc, sizeof *f);
+	Entry *e, **f = calloc(argc, sizeof *f);
+	if (argc > 1 && !strcmp(argv[1], "amend")) base = parent(), argv++, argc--;
+	rev = argc > 1 && *argv[1] == 'u';
+	e = status(&n);
 	for (i = 0; argc < 3 && i < n; i++) printf("%c%c %s%s%s\n", e[i].x, e[i].y, e[i].path, e[i].orig ? " < " : "", e[i].orig ? e[i].orig : "");
 	if (argc < 3) return 0;
-	if (*argv[1] == 'c') r = commit(&o, argv[2], 0);
+	if (*argv[1] == 'c') r = commit(&o, argv[2], !!base);
 	else {
 		while (k < 3 && strcmp(argv[1], op[k])) k++;
 		for (j = 2; j < (k < 3 ? argc : 3); j++) {

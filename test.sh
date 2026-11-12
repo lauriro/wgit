@@ -102,6 +102,23 @@ sed -i 's/^2$/two/; s/^18$/eighteen/' a.txt
 "$T" revert a.txt
 check 'revert keeps index' "$(printf -- '-18\n+eighteen')" "$(changes --cached; changes -- a.txt)"
 
+# ---- Amend ----
+
+sed -i 's/^2$/two/' a.txt
+"$T" add a.txt
+"$T" commit 'Two and eighteen'
+check 'amend status' 'M  a.txt' "$("$T"; "$T" amend)"
+"$T" amend unstage a.txt "$(at '--cached HEAD^' a.txt '^@@' 2)"
+check 'amend unstage hunk' "$(printf -- '-2\n+two')" "$(changes --cached HEAD^)"
+"$T" amend reset a.txt
+check 'amend unstage file' "$(printf -- '-2\n+two\n-18\n+eighteen')" "$(changes --cached HEAD^; changes -- a.txt)"
+"$T" stage a.txt "$(at '' a.txt '^@@')"
+"$T" amend commit 'Two'
+check 'amend drops a change' "$(printf -- '-2\n+two\n-18\n+eighteen')" "$(git show --format= -U0 | grep '^[-+][^-+]'; changes -- a.txt)"
+mkdir root && cd root && git init -q && git config user.name t && git config user.email t@t
+seq 2 > r.txt && git add r.txt && git commit -qm root
+check 'amend root commit' "$(printf 'A  r.txt\n?? r.txt')" "$("$T" amend; "$T" amend reset r.txt; "$T" amend)"
+
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
 
