@@ -25,6 +25,8 @@ a message box and a Commit button below.
   While Amend is on, Staged also shows the changes of the last commit.
   Unstage a file, hunk or line to take it out of the last commit.
 - Drag the line over the message box to make the box higher.
+- wgit remembers the window size and the pane positions in `~/.local/state/wgit`.
+  It does not save the size of a maximized or fullscreen window.
 
 Keys:
 

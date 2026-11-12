@@ -137,7 +137,8 @@ git log --stat -1 >> $O/cached.txt
 xdotool mousemove 318 676 click 1; sleep 1; shot 8
 ```
 
-The window opens at 0,0 without decorations, 1000x700.
+The window opens at 0,0 without decorations, 1000x700,
+when `~/.local/state/wgit` (the size and pane positions saved on close) does not exist.
 At that size Stage, Unstage and Revert are at 48, 147 and 248, y 22.
 List rows are 23 px apart starting at y 57,
 so with nothing staged the first unstaged row is at y 103.

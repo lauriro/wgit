@@ -5,7 +5,7 @@
 #include "diff-view.h"
 #include "git.h"
 
-static GtkWidget *win, *list, *bar[3], *lbtn, *amend;
+static GtkWidget *win, *list, *bar[3], *pane[2], *lbtn, *amend;
 static GtkTextBuffer *msg;
 static GtkTreeStore *store;
 static const char *head[] = {"Staged", "Unstaged", "Untracked"}, *arrow[] = {"pan-down-symbolic", "pan-end-symbolic"};
@@ -14,8 +14,8 @@ static const char *verb[] = {"Stage", "Unstage", "Revert"}, *ask[][2] = {
 	{"Delete %d untracked file%s?", "_Delete"}
 };
 static Entry *ent;
-static int nent, sec, busy, shut[3];
-static char *cur, *text;
+static int nent, sec, busy, shut[3], geo[] = {1000, 700, 300, 0};
+static char *cur, *text, *conf;
 
 static void set(GtkTreeIter *it, char *m, int i, const char *icon, int n)
 {
@@ -206,6 +206,21 @@ static gboolean key(GtkWidget *w, GdkEventKey *ev)
 	return TRUE;
 }
 
+static gboolean quit(GtkWidget *w)
+{
+	FILE *f;
+	int k;
+	if (!(gdk_window_get_state(gtk_widget_get_window(w)) & (GDK_WINDOW_STATE_MAXIMIZED | GDK_WINDOW_STATE_FULLSCREEN)))
+		gtk_window_get_size(GTK_WINDOW(w), geo, geo + 1);
+	for (k = 0; k < 2; k++) geo[k + 2] = gtk_paned_get_position(GTK_PANED(pane[k]));
+	g_mkdir_with_parents(g_get_user_state_dir(), 0700);
+	if ((f = fopen(conf, "w"))) {
+		fprintf(f, "%d %d %d %d\n", geo[0], geo[1], geo[2], geo[3]);
+		fclose(f);
+	}
+	return FALSE;
+}
+
 static GtkWidget *scroll(GtkWidget *w)
 {
 	GtkWidget *s = gtk_scrolled_window_new(0, 0);
@@ -215,21 +230,26 @@ static GtkWidget *scroll(GtkWidget *w)
 
 int cmd_commit(const char *path)
 {
-	GtkWidget *h, *l, *v, *r, *b, *m, *c;
+	GtkWidget *l, *r, *b, *m, *c;
 	GtkTreeSelection *s;
+	FILE *f;
 	char *top = repo(path);
 	int k;
 	if (!top) return fputs("wgit: not a git repository\n", stderr), 1;
 	setenv("NO_AT_BRIDGE", "1", 0);
 	g_set_prgname("wgit");
 	gtk_init(0, 0);
-	h = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+	if ((f = fopen(conf = g_build_filename(g_get_user_state_dir(), "wgit", NULL), "r"))) {
+		fscanf(f, "%d %d %d %d", geo, geo + 1, geo + 2, geo + 3);
+		fclose(f);
+	}
+	pane[0] = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+	pane[1] = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
 	l = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-	v = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
 	r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
 	win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title(GTK_WINDOW(win), top);
-	gtk_window_set_default_size(GTK_WINDOW(win), 1000, 700);
+	gtk_window_set_default_size(GTK_WINDOW(win), geo[0], geo[1]);
 	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store = gtk_tree_store_new(4, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING, G_TYPE_INT)));
 	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, gtk_cell_renderer_pixbuf_new(), "icon-name", 2, "sensitive", 3, NULL);
 	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, gtk_cell_renderer_text_new(), "markup", 0, NULL);
@@ -254,8 +274,8 @@ int cmd_commit(const char *path)
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), lbtn = gtk_button_new(), FALSE, FALSE, 0);
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
-	gtk_paned_pack1(GTK_PANED(v), r, TRUE, FALSE);
-	gtk_paned_pack2(GTK_PANED(v), r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6), FALSE, FALSE);
+	gtk_paned_pack1(GTK_PANED(pane[1]), r, TRUE, FALSE);
+	gtk_paned_pack2(GTK_PANED(pane[1]), r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6), FALSE, FALSE);
 	gtk_box_pack_start(GTK_BOX(r), b = scroll(m = gtk_text_view_new()), TRUE, TRUE, 0);
 	gtk_widget_set_size_request(b, -1, 120);
 	gtk_text_view_set_monospace(GTK_TEXT_VIEW(m), TRUE);
@@ -264,14 +284,15 @@ int cmd_commit(const char *path)
 	gtk_box_pack_start(GTK_BOX(b), amend = gtk_check_button_new_with_label("Amend"), FALSE, FALSE, 0);
 	gtk_box_pack_end(GTK_BOX(b), c = gtk_button_new_with_label("Commit"), FALSE, FALSE, 0);
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
-	gtk_paned_pack1(GTK_PANED(h), l, FALSE, TRUE);
-	gtk_paned_pack2(GTK_PANED(h), v, TRUE, TRUE);
-	gtk_paned_set_position(GTK_PANED(h), 300);
-	gtk_container_add(GTK_CONTAINER(win), h);
+	gtk_paned_pack1(GTK_PANED(pane[0]), l, FALSE, TRUE);
+	gtk_paned_pack2(GTK_PANED(pane[0]), pane[1], TRUE, TRUE);
+	for (k = 0; k < 2; k++) if (geo[k + 2]) gtk_paned_set_position(GTK_PANED(pane[k]), geo[k + 2]);
+	gtk_container_add(GTK_CONTAINER(win), pane[0]);
 	g_signal_connect(lbtn, "clicked", G_CALLBACK(chosen), 0);
 	g_signal_connect(amend, "toggled", G_CALLBACK(last), 0);
 	g_signal_connect(c, "clicked", G_CALLBACK(submit), 0);
 	g_signal_connect(win, "key-press-event", G_CALLBACK(key), 0);
+	g_signal_connect(win, "delete-event", G_CALLBACK(quit), 0);
 	g_signal_connect(win, "destroy", G_CALLBACK(gtk_main_quit), 0);
 	reload();
 	gtk_widget_show_all(win);
