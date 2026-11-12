@@ -8,7 +8,7 @@
 static GtkWidget *win, *list, *fbtn, *lbtn, *amend;
 static GtkTextBuffer *msg;
 static GtkTreeStore *store;
-static const char *head[] = {"Staged", "Unstaged", "Untracked"};
+static const char *head[] = {"Staged", "Unstaged", "Untracked"}, *arrow[] = {"pan-down-symbolic", "pan-end-symbolic"};
 static Entry *ent;
 static int nent, side, busy, shut[3];
 static char *cur, *text;
@@ -29,9 +29,9 @@ static void show(void)
 	gtk_button_set_label(GTK_BUTTON(lbtn), side ? "Unstage lines" : "Stage lines");
 }
 
-static void set(GtkTreeIter *it, char *m, const char *path, int k)
+static void set(GtkTreeIter *it, char *m, const char *path, int k, const char *icon, int n)
 {
-	gtk_tree_store_set(store, it, 0, m, 1, path, 2, k, -1);
+	gtk_tree_store_set(store, it, 0, m, 1, path, 2, k, 3, icon, 4, n, -1);
 	g_free(m);
 }
 
@@ -50,10 +50,10 @@ static void reload(void)
 			if ((c = k ? ent[i].y : ent[i].x) == ' ' || (c == '?') != (k == 2)) continue;
 			n++;
 			gtk_tree_store_append(store, &it, &hd);
-			set(&it, g_markup_printf_escaped("%c  %s", c, ent[i].path), ent[i].path, s = !k);
+			set(&it, g_markup_printf_escaped("%c  %s", c, ent[i].path), ent[i].path, s = !k, 0, 0);
 			if (!shut[k] && cur && !strcmp(cur, ent[i].path) && (hs < 0 || s == side)) hit = it, hs = s;
 		}
-		set(&hd, g_strdup_printf("<b>%s</b> <span alpha=\"50%%\">%d</span>", head[k], n), 0, -1 - k);
+		set(&hd, g_strdup_printf("<b>%s</b>  <span alpha=\"50%%\">%d</span>", head[k], n), 0, -1 - k, arrow[n && shut[k]], n);
 		tp = gtk_tree_model_get_path(GTK_TREE_MODEL(store), &hd);
 		if (!shut[k]) gtk_tree_view_expand_row(GTK_TREE_VIEW(list), tp, FALSE);
 		gtk_tree_path_free(tp);
@@ -119,7 +119,18 @@ static void fold(GtkTreeView *v, GtkTreeIter *it, GtkTreePath *p, gpointer c)
 {
 	int k;
 	gtk_tree_model_get(GTK_TREE_MODEL(store), it, 2, &k, -1);
-	shut[-1 - k] = GPOINTER_TO_INT(c);
+	gtk_tree_store_set(store, it, 3, arrow[shut[-1 - k] = GPOINTER_TO_INT(c)], -1);
+}
+
+static gboolean press(GtkTreeView *v, GdkEventButton *ev)
+{
+	GtkTreePath *p;
+	int r = 0;
+	if (gtk_tree_view_get_path_at_pos(v, ev->x, ev->y, &p, 0, 0, 0)) {
+		if ((r = !can(0, GTK_TREE_MODEL(store), p)) && ev->type == GDK_BUTTON_PRESS) act(v, p);
+		gtk_tree_path_free(p);
+	}
+	return r;
 }
 
 static void lines(int from, int to)
@@ -187,14 +198,17 @@ int cmd_commit(const char *path)
 	win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title(GTK_WINDOW(win), top);
 	gtk_window_set_default_size(GTK_WINDOW(win), 1000, 700);
-	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store = gtk_tree_store_new(3, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT)));
+	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store = gtk_tree_store_new(5, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING, G_TYPE_INT)));
+	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, gtk_cell_renderer_pixbuf_new(), "icon-name", 3, "sensitive", 4, NULL);
 	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, gtk_cell_renderer_text_new(), "markup", 0, NULL);
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(list), FALSE);
+	gtk_tree_view_set_show_expanders(GTK_TREE_VIEW(list), FALSE);
 	gtk_tree_selection_set_select_function(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), (GtkTreeSelectionFunc)can, 0, 0);
 	g_signal_connect(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), "changed", G_CALLBACK(sel), 0);
 	g_signal_connect(list, "row-activated", G_CALLBACK(act), 0);
 	g_signal_connect(list, "row-collapsed", G_CALLBACK(fold), GINT_TO_POINTER(1));
 	g_signal_connect(list, "row-expanded", G_CALLBACK(fold), 0);
+	g_signal_connect(list, "button-press-event", G_CALLBACK(press), 0);
 	gtk_box_pack_start(GTK_BOX(r), diff_view(lines), TRUE, TRUE, 0);
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), fbtn = gtk_button_new(), FALSE, FALSE, 0);
