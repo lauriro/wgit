@@ -306,6 +306,7 @@ static void last(GtkToggleButton *b)
 static gboolean key(GtkWidget *w, GdkEventKey *ev)
 {
 	if (ev->keyval == GDK_KEY_F5) reload();
+	else if (ev->keyval == GDK_KEY_Delete && gtk_widget_has_focus(list) && gtk_widget_get_sensitive(bar[2])) run(0, GINT_TO_POINTER(2));
 	else if ((ev->keyval == GDK_KEY_Return || ev->keyval == GDK_KEY_KP_Enter) && ev->state & GDK_CONTROL_MASK) submit();
 	else return FALSE;
 	return TRUE;

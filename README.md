@@ -43,6 +43,7 @@ Keys:
 
 - `Ctrl+Enter` commits.
 - `F5` reloads the file lists, as the Rescan button does.
+- `Delete` in the file list does Revert on the selected files, and asks first.
 
 ## Build and test
 
