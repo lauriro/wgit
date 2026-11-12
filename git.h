@@ -9,6 +9,6 @@ Entry *status(int *n);
 char *diff(Entry *e, int cached);
 char *patch(const char *d, int from, int to, int rev);
 int apply(char **out, const char *d, int from, int to, int rev);
-int stage(char **out, Entry *e, int rev);
+int files(char **out, int op, Entry **e, int n);
 int commit(char **out, const char *msg, int amend);
 

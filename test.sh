@@ -86,6 +86,22 @@ check 'commit' "$(printf 'Change e f\n\nWhy it changed')" "$(git log -1 --format
 check 'committed' "$(printf -- '-1\n+one')" "$(git show --format= -U0 | grep '^[-+][^-+]')"
 check 'index clean' '' "$(changes --cached)"
 
+# ---- Several files ----
+
+sed -i 's/^1$/uno/' a.txt
+"$T" add a.txt c.txt d.txt
+check 'stage files' "$(printf 'M  a.txt\nR  c.txt < d.txt')" "$("$T")"
+"$T" reset a.txt c.txt
+check 'unstage files' "$(printf ' M a.txt\n D d.txt\n?? c.txt')" "$("$T")"
+"$T" revert a.txt d.txt
+check 'revert files' '?? c.txt' "$("$T")"
+"$T" revert c.txt
+check 'delete untracked' '' "$("$T")"
+sed -i 's/^2$/two/; s/^18$/eighteen/' a.txt
+"$T" stage a.txt "$(at '' a.txt '^@@' 2)"
+"$T" revert a.txt
+check 'revert keeps index' "$(printf -- '-18\n+eighteen')" "$(changes --cached; changes -- a.txt)"
+
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
 

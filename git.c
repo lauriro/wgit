@@ -155,11 +155,26 @@ int apply(char **out, const char *d, int from, int to, int rev)
 	return r;
 }
 
-int stage(char **out, Entry *e, int rev)
+int files(char **out, int op, Entry **e, int n)
 {
-	return git(out, 0, rev
-		? (char *[]){"git", "reset", "-q", "--", e->path, e->orig, 0}
-		: (char *[]){"git", "add", "-A", "--", e->path, 0});
+	static char *cmd[][4] = {
+		{"git", "add", "-A", "--"},
+		{"git", "reset", "-q", "--"},
+		{"git", "checkout", "-q", "--"},
+		{"git", "clean", "-fq", "--"}
+	};
+	char **a = malloc((2 * n + 5) * sizeof *a), **p = a + 4;
+	int r;
+	op += op == 2 && e[0]->y == '?';
+	memcpy(a, cmd[op], sizeof *cmd);
+	for (; n--; e++) {
+		*p++ = (*e)->path;
+		if (op == 1 && (*e)->orig) *p++ = (*e)->orig;
+	}
+	*p = 0;
+	r = git(out, 0, a);
+	free(a);
+	return r;
 }
 
 int commit(char **out, const char *msg, int amend)

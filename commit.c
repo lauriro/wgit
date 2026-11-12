@@ -106,7 +106,7 @@ static void file(void)
 {
 	Entry *e = find();
 	char *o;
-	if (e) done(stage(&o, e, side), &o);
+	if (e) done(files(&o, side, &e, 1), &o);
 }
 
 static void act(GtkTreeView *v, GtkTreePath *p)

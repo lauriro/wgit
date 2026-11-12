@@ -25,6 +25,8 @@ The binary goes into a desktop image later, so it is built against Debian testin
   parses `git status --porcelain=v1 -z`,
   gets a file's diff (`--no-index` against `/dev/null` for an untracked file),
   and builds hunk and line patches for `git apply --cached [-R] -`.
+  `files()` stages, unstages or reverts several files in one git run;
+  revert checks out tracked files from the index and deletes untracked files with `git clean -f`.
   `GIT_LITERAL_PATHSPECS=1` is set for every git run, so names with `:` or `*` are plain paths.
 - `diff-view.c`, `diff-view.h`: the coloured diff view, shared by commit and the later log.
   The buffer holds the diff line for line, so a buffer line number is a diff line number.
@@ -62,11 +64,11 @@ podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build sh -c 'make && make test'
 
 `make` builds `wgit` with `-Os -s`; `make test` builds `wgit-test` and runs `test.sh`.
 `wgit-test` with no arguments prints the status;
-`add|reset FILE` moves a whole file;
+`add|reset|revert FILE...` stages, unstages or reverts whole files;
 `stage|unstage FILE FROM [TO]` applies diff lines FROM..TO (0-based), or the hunk whose header is FROM;
 `commit MSG` commits.
 
-The 16 tests in `test.sh`, all checked against the index with `git diff --cached`:
+The 21 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
 
 1. stage hunk: the second hunk of a file with two hunks is staged.
 2. other hunk stays: the first hunk stays unstaged.
@@ -84,8 +86,13 @@ The 16 tests in `test.sh`, all checked against the index with `git diff --cached
 14. commit: the message comes back from `git log`.
 15. committed: the commit holds the staged change.
 16. index clean: nothing is staged after the commit.
+17. stage files: a modified file and a rename (a new file plus a deleted one) are staged in one run.
+18. unstage files: they go back, the rename by its new name only.
+19. revert files: a modified and a deleted file get their index content back.
+20. delete untracked: revert deletes an untracked file.
+21. revert keeps index: revert of a partly staged file keeps the staged hunk.
 
-The summary line is `16 passed, 0 failed`.
+The summary line is `21 passed, 0 failed`.
 
 ## Checking the window
 
