@@ -51,6 +51,8 @@ a message box and Cancel, Rescan and Commit buttons below.
 - Drag the line over the message box to make the box higher.
 - wgit remembers the window size and the pane positions in `~/.local/state/wgit`.
   It does not save the size of a maximized or fullscreen window.
+- wgit follows the dark or light colour scheme of the desktop (the freedesktop `color-scheme` setting)
+  and switches while it runs.
 
 ### Keys
 

@@ -10,6 +10,11 @@ The laptop runs a Debian testing (glibc) desktop with the dwl compositor.
 GTK 3.24 is already in the desktop's stack image, so wgit uses GTK 3 only:
 no GTK 4, no libadwaita, no other libraries.
 The binary goes into a desktop image later, so it is built against Debian testing.
+The desktop has no xdg-desktop-portal and no dconf.
+The bar, tark-shell, owns `org.freedesktop.portal.Desktop` on the session bus
+and implements only `org.freedesktop.portal.Settings` for `org.freedesktop.appearance` `color-scheme`:
+`ReadOne`, the older `Read` that wraps the value in one more variant (1 dark, 2 light),
+and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches.
 
 - `wgit` alone prints the usage and exits 0; an unknown subcommand exits 1.
 - `wgit c` / `wgit commit [path]` opens the commit window, like gitg's commit view.
@@ -43,6 +48,7 @@ The binary goes into a desktop image later, so it is built against Debian testin
   A right click adds to the text view menu through the menu callback,
   with the header line of the hunk under the pointer and the `+` or `-` line under it, each -1 if there is none.
 - `commit.c`: the commit window (`cmd_commit`).
+  `theme()` follows the desktop colour scheme; it moves to a shared file when `wgit log` comes.
 - `wgit.c`: the subcommand table and the prefix match.
 - `test.c`, `test.sh`: the test binary `wgit-test` and the script that drives it.
 - `Containerfile`: the local build image `wgit-build`.
@@ -162,6 +168,9 @@ Diff lines are 17 px apart starting at y 14,
 the message handle is at y 527, Amend at 360,676, Cancel, Rescan and Commit at 776, 861 and 950, y 676.
 In the diff menu, Stage hunk is 17 px and Stage lines 42 px below the right click.
 Read the PNGs with the Read tool to see them.
+To check the theme, add `dbus-daemon dbus-bin` to the image, run the script under `dbus-run-session --`,
+and start a small GDBus mock that owns `org.freedesktop.portal.Desktop` like tark-shell does,
+answers `ReadOne` and `Read` and emits `SettingChanged` on a signal.
 The window is still to be tried by the user on Wayland.
 
 ## Known limits
@@ -174,7 +183,7 @@ The window is still to be tried by the user on Wayland.
 ## The user's rules
 
 - The shortest general code that does the job, no frameworks.
-  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 36,632 bytes.
+  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 36,728 bytes.
 - No comments that say what the code does; a rare comment says why.
 - Tabs for indentation.
 - Every file except JSON starts with an empty line and ends with an empty line.
