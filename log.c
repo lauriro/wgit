@@ -8,7 +8,7 @@
 
 enum { W = 7, PAD = 4 };
 
-static GtkWidget *list, *dv;
+static GtkWidget *list, *dv, *sum;
 static GtkTreeViewColumn *graph;
 static GtkListStore *store;
 static GtkTextBuffer *info;
@@ -107,7 +107,7 @@ static void pick(GtkTreeSelection *s)
 	GtkTreeModel *m;
 	GtkTreeIter it;
 	char *o;
-	int i;
+	int i, n, a, d;
 	if (!gtk_tree_selection_get_selected(s, &m, &it)) return;
 	gtk_tree_model_get(m, &it, 1, &i, -1);
 	if (!row[i].hash) return;
@@ -116,7 +116,15 @@ static void pick(GtkTreeSelection *s)
 	free(o);
 	free(text);
 	git(&text, 0, (char *[]){"git", "show", "--format=", "--no-color", "--no-ext-diff", "--diff-merges=first-parent", row[i].hash, 0});
-	diff_show(dv, text);
+	n = diff_files(dv, text, &a, &d);
+	o = g_strdup_printf("%d file%s, +%d −%d", n, n == 1 ? "" : "s", a, d);
+	gtk_label_set_text(GTK_LABEL(sum), o);
+	g_free(o);
+}
+
+static void all(gpointer hide)
+{
+	diff_fold(dv, GPOINTER_TO_INT(hide));
 }
 
 static void load(void)
@@ -140,9 +148,11 @@ static void load(void)
 
 GtkWidget *log_view(GtkWidget **pane)
 {
+	static const char *fold[] = {"Expand all", "Collapse all"};
 	GtkWidget *v, *r, *b, *c;
 	GtkTreeViewColumn *col;
 	GtkCellRenderer *t;
+	int k;
 	if (pane[0]) {
 		load();
 		return pane[0];
@@ -168,6 +178,11 @@ GtkWidget *log_view(GtkWidget **pane)
 	r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
 	gtk_box_pack_start(GTK_BOX(r), dv = diff_view(0, 0), TRUE, TRUE, 0);
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
+	for (k = 0; k < 2; k++) {
+		gtk_box_pack_start(GTK_BOX(b), c = gtk_button_new_with_label(fold[k]), FALSE, FALSE, 0);
+		g_signal_connect_swapped(c, "clicked", G_CALLBACK(all), GINT_TO_POINTER(k));
+	}
+	gtk_box_pack_start(GTK_BOX(b), sum = gtk_label_new(0), FALSE, FALSE, 6);
 	gtk_box_pack_end(GTK_BOX(b), c = gtk_button_new_with_label("Commit"), FALSE, FALSE, 0);
 	g_signal_connect_swapped(c, "clicked", G_CALLBACK(flip), GINT_TO_POINTER(0));
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);

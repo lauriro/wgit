@@ -49,6 +49,9 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
 - `diff-view.c`, `diff-view.h`: the coloured diff view, shared by commit and log.
   Each view keeps its callbacks on its own widget, so one window can hold several;
   `diff_show()` and `diff_lines()` take the view.
+  `diff_files()` shows a whole commit for the log view: a bold title line per file (`▾ path +a −d`)
+  instead of the `diff --git`, `index`, `---` and `+++` lines; a click on a title hides its lines with an invisible tag,
+  and `diff_fold()` does it for all titles.
   The buffer holds the diff line for line, so a buffer line number is a diff line number.
   This is what lets a selection map straight onto `patch()`.
   A click on a line that starts with `@` calls the hunk callback with `(line, -1)`.

@@ -75,6 +75,8 @@ the graph of all branches at the left, the selected commit and its diff at the r
   The HEAD branch is bold green, other local branches green, remote branches grey, tags yellow.
   A subject that starts with `!` (a breaking change) shows the `!` in bold red.
 - Click a commit to see its details, its signature and its diff at the right.
+- The diff has one section per file: a title with the path and `+added −removed`, then its hunks.
+  Click a title to close or open that file; Expand all and Collapse all do it for every file.
 
 
 ## Contributing
