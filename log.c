@@ -9,6 +9,7 @@
 static GtkTextBuffer *info;
 static Row *row;
 static char *text;
+static GtkWidget *dv;
 
 static void pick(GtkTreeSelection *s)
 {
@@ -24,7 +25,7 @@ static void pick(GtkTreeSelection *s)
 	free(o);
 	free(text);
 	git(&text, 0, (char *[]){"git", "show", "--format=", "--no-color", "--no-ext-diff", "--diff-merges=first-parent", row[i].hash, 0});
-	diff_show(text);
+	diff_show(dv, text);
 }
 
 int cmd_log(const char *path)
@@ -63,7 +64,7 @@ int cmd_log(const char *path)
 	pane[0] = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
 	pane[1] = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
 	gtk_paned_pack1(GTK_PANED(pane[1]), scroll(v), FALSE, FALSE);
-	gtk_paned_pack2(GTK_PANED(pane[1]), diff_view(0, 0), TRUE, FALSE);
+	gtk_paned_pack2(GTK_PANED(pane[1]), dv = diff_view(0, 0), TRUE, FALSE);
 	gtk_paned_pack1(GTK_PANED(pane[0]), scroll(list), FALSE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[0]), pane[1], TRUE, TRUE);
 	gtk_paned_set_position(GTK_PANED(pane[0]), 450);

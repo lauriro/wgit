@@ -6,7 +6,7 @@
 #include "git.h"
 #include "ui.h"
 
-static GtkWidget *win, *list, *bar[4], *amend;
+static GtkWidget *win, *list, *dv, *bar[4], *amend;
 static GtkTextBuffer *msg;
 static GtkTreeStore *store;
 static const char *head[] = {"Staged", "Unstaged", "Untracked"}, *arrow[] = {"pan-down-symbolic", "pan-end-symbolic"};
@@ -50,7 +50,7 @@ static void sel(GtkTreeSelection *s)
 		cur = g_strdup(ent[k].path);
 		text = diff(ent + k, !(sec = *gtk_tree_path_get_indices(p)));
 	}
-	diff_show(text);
+	diff_show(dv, text);
 	for (k = 0; k < 4; k++) gtk_widget_set_sensitive(bar[k], l && use[k] >> sec & 1);
 	gtk_tree_path_free(p);
 	g_list_free_full(l, (GDestroyNotify)gtk_tree_path_free);
@@ -246,7 +246,7 @@ static void pick(GtkWidget *w, gpointer p)
 		context = k > 4 ? MAX(1, context / 2) : 2 * context;
 		sel(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
 	} else {
-		if (k & 1 && !diff_lines(&f, &t)) f = t = one;
+		if (k & 1 && !diff_lines(dv, &f, &t)) f = t = one;
 		if (k < 2 || sure(g_strdup_printf(ask[k][0], cur), ask[k][1])) done(apply(&o, text, f, t, k < 2 ? !sec : 2), &o);
 	}
 }
@@ -255,7 +255,7 @@ static void menu(GtkMenu *m, int h, int l)
 {
 	static const char *name[] = {"Stage hunk", "Stage lines", "Revert hunk", "Revert lines", "More context", "Less context", "Unstage hunk", "Unstage lines"};
 	GtkWidget *i;
-	int f, t, k, n = 0, has = diff_lines(&f, &t) || l >= 0;
+	int f, t, k, n = 0, has = diff_lines(dv, &f, &t) || l >= 0;
 	hunk = h;
 	one = l;
 	for (k = 0; k < 6; k++) {
@@ -341,7 +341,7 @@ int cmd_commit(const char *path)
 		g_signal_connect(bar[k], "clicked", G_CALLBACK(run), GINT_TO_POINTER(k));
 	}
 	gtk_box_pack_start(GTK_BOX(l), scroll(list), TRUE, TRUE, 0);
-	gtk_box_pack_start(GTK_BOX(r), diff_view(lines, menu), TRUE, TRUE, 0);
+	gtk_box_pack_start(GTK_BOX(r), dv = diff_view(lines, menu), TRUE, TRUE, 0);
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
 	gtk_paned_pack1(GTK_PANED(pane[1]), r, TRUE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[1]), r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6), FALSE, FALSE);

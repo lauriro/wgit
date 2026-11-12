@@ -45,7 +45,9 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   `history()` splits `git log --graph --all --color` into rows (graph, hash, refs, author, date, subject;
   a connector row such as `|/` has no hash), and `cell()` steps through a graph, one character and its colour at a time.
   `GIT_LITERAL_PATHSPECS=1` is set for every git run, so names with `:` or `*` are plain paths.
-- `diff-view.c`, `diff-view.h`: the coloured diff view, shared by commit and the later log.
+- `diff-view.c`, `diff-view.h`: the coloured diff view, shared by commit and log.
+  Each view keeps its callbacks on its own widget, so one window can hold several;
+  `diff_show()` and `diff_lines()` take the view.
   The buffer holds the diff line for line, so a buffer line number is a diff line number.
   This is what lets a selection map straight onto `patch()`.
   A click on a line that starts with `@` calls the hunk callback with `(line, -1)`.
