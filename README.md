@@ -85,6 +85,7 @@ and `test.sh` runs it against throwaway repos.
 - `git.c` runs git, parses the status and builds hunk and line patches. No GTK.
 - `diff-view.c` shows a diff, shared with a later `wgit log`.
 - `commit.c` is the commit window.
+- `ui.c` is what all windows share: start, colour scheme and saved layout.
 - `wgit.c` picks the subcommand.
 
 

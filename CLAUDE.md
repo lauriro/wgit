@@ -53,7 +53,9 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   A right click adds to the text view menu through the menu callback,
   with the header line of the hunk under the pointer and the `+` or `-` line under it, each -1 if there is none.
 - `commit.c`: the commit window (`cmd_commit`).
-  `theme()` follows the desktop colour scheme; it moves to a shared file when `wgit log` comes.
+- `ui.c`, `ui.h`: what every window shares: `window()` starts GTK, follows the desktop colour scheme (`theme()`)
+  and restores the size and pane positions from a state file (`wgit` for commit, one name per window);
+  `loop()` sets the panes, shows the window and saves the layout on close.
 - `wgit.c`: the subcommand table and the prefix match.
 - `test.c`, `test.sh`: the test binary `wgit-test` and the script that drives it.
 - `Containerfile`: the local build image `wgit-build`.

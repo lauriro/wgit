@@ -4,8 +4,9 @@
 #include <string.h>
 #include "diff-view.h"
 #include "git.h"
+#include "ui.h"
 
-static GtkWidget *win, *list, *bar[4], *pane[2], *amend;
+static GtkWidget *win, *list, *bar[4], *amend;
 static GtkTextBuffer *msg;
 static GtkTreeStore *store;
 static const char *head[] = {"Staged", "Unstaged", "Untracked"}, *arrow[] = {"pan-down-symbolic", "pan-end-symbolic"};
@@ -17,20 +18,13 @@ static const char *verb[] = {"Stage", "Unstage", "Revert", "Ignore"}, *ask[][2] 
 };
 static const char use[] = {6, 1, 6, 4};
 static Entry *ent;
-static int nent, sec, busy, sorted, hunk, one, part, shut[3], geo[] = {1000, 700, 300, 0};
-static char *cur, *text, *conf;
+static int nent, sec, busy, sorted, hunk, one, part, shut[3];
+static char *cur, *text;
 
 static void set(GtkTreeIter *it, char *m, int i, const char *icon, int n)
 {
 	gtk_tree_store_set(store, it, 0, m, 1, i, 2, icon, 3, n, -1);
 	g_free(m);
-}
-
-static GtkWidget *scroll(GtkWidget *w)
-{
-	GtkWidget *s = gtk_scrolled_window_new(0, 0);
-	gtk_container_add(GTK_CONTAINER(s), w);
-	return s;
 }
 
 static void sel(GtkTreeSelection *s)
@@ -313,84 +307,20 @@ static gboolean key(GtkWidget *w, GdkEventKey *ev)
 	return TRUE;
 }
 
-static gboolean quit(GtkWidget *w)
-{
-	FILE *f;
-	int k;
-	if (!(gdk_window_get_state(gtk_widget_get_window(w)) & (GDK_WINDOW_STATE_MAXIMIZED | GDK_WINDOW_STATE_FULLSCREEN)))
-		gtk_window_get_size(GTK_WINDOW(w), geo, geo + 1);
-	for (k = 0; k < 2; k++) geo[k + 2] = gtk_paned_get_position(GTK_PANED(pane[k]));
-	g_mkdir_with_parents(g_get_user_state_dir(), 0700);
-	if ((f = fopen(conf, "w"))) {
-		fprintf(f, "%d %d %d %d\n", geo[0], geo[1], geo[2], geo[3]);
-		fclose(f);
-	}
-	return FALSE;
-}
-
-static void dark(GVariant *v)
-{
-	GVariant *u;
-	while (g_variant_is_of_type(v, G_VARIANT_TYPE_VARIANT)) {
-		u = g_variant_get_variant(v);
-		g_variant_unref(v);
-		v = u;
-	}
-	if (g_variant_is_of_type(v, G_VARIANT_TYPE_UINT32))
-		g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", g_variant_get_uint32(v) == 1, NULL);
-	g_variant_unref(v);
-}
-
-static void changed(GDBusConnection *c, const char *from, const char *path, const char *iface, const char *sig, GVariant *p)
-{
-	const char *k;
-	g_variant_get_child(p, 1, "&s", &k);
-	if (!strcmp(k, "color-scheme")) dark(g_variant_get_child_value(p, 2));
-}
-
-static void theme(void)
-{
-	static const char *how[] = {"ReadOne", "Read"};
-	const char *name = "org.freedesktop.portal.Desktop", *path = "/org/freedesktop/portal/desktop";
-	const char *iface = "org.freedesktop.portal.Settings", *ns = "org.freedesktop.appearance";
-	GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, 0, 0);
-	GVariant *r = 0;
-	int k;
-	if (!bus) return;
-	for (k = 0; !r && k < 2; k++)
-		r = g_dbus_connection_call_sync(bus, name, path, iface, how[k], g_variant_new("(ss)", ns, "color-scheme"), 0, 0, 1000, 0, 0);
-	if (r) {
-		dark(g_variant_get_child_value(r, 0));
-		g_variant_unref(r);
-	}
-	g_dbus_connection_signal_subscribe(bus, name, iface, "SettingChanged", path, ns, 0, (GDBusSignalCallback)changed, 0, 0);
-}
-
 int cmd_commit(const char *path)
 {
 	static const char *end[] = {"Commit", "Rescan", "Cancel"};
 	GCallback fn[] = {G_CALLBACK(submit), G_CALLBACK(reload), G_CALLBACK(gtk_window_close)};
-	GtkWidget *l, *r, *b, *m, *c;
+	GtkWidget *l, *r, *b, *m, *c, *pane[2];
 	GtkTreeSelection *s;
-	FILE *f;
 	char *top = repo(path);
 	int k;
 	if (!top) return fputs("wgit: not a git repository\n", stderr), 1;
-	setenv("NO_AT_BRIDGE", "1", 0);
-	g_set_prgname("wgit");
-	gtk_init(0, 0);
-	theme();
-	if ((f = fopen(conf = g_build_filename(g_get_user_state_dir(), "wgit", NULL), "r"))) {
-		fscanf(f, "%d %d %d %d", geo, geo + 1, geo + 2, geo + 3);
-		fclose(f);
-	}
+	win = window(top, "wgit");
 	pane[0] = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
 	pane[1] = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
 	l = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-	win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-	gtk_window_set_title(GTK_WINDOW(win), top);
-	gtk_window_set_default_size(GTK_WINDOW(win), geo[0], geo[1]);
 	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store = gtk_tree_store_new(4, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING, G_TYPE_INT)));
 	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, gtk_cell_renderer_pixbuf_new(), "icon-name", 2, "sensitive", 3, NULL);
 	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, gtk_cell_renderer_text_new(), "markup", 0, NULL);
@@ -428,15 +358,11 @@ int cmd_commit(const char *path)
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
 	gtk_paned_pack1(GTK_PANED(pane[0]), l, FALSE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[0]), pane[1], TRUE, TRUE);
-	for (k = 0; k < 2; k++) if (geo[k + 2]) gtk_paned_set_position(GTK_PANED(pane[k]), geo[k + 2]);
-	gtk_container_add(GTK_CONTAINER(win), pane[0]);
+	gtk_paned_set_position(GTK_PANED(pane[0]), 300);
 	g_signal_connect(amend, "toggled", G_CALLBACK(last), 0);
 	g_signal_connect(win, "key-press-event", G_CALLBACK(key), 0);
-	g_signal_connect(win, "delete-event", G_CALLBACK(quit), 0);
-	g_signal_connect(win, "destroy", G_CALLBACK(gtk_main_quit), 0);
 	reload();
-	gtk_widget_show_all(win);
-	gtk_main();
+	loop(win, pane);
 	return 0;
 }
 
