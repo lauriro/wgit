@@ -5,8 +5,8 @@
 
 static GtkTextBuffer *buf;
 static void (*on_hunk)(int from, int to);
-static void (*on_menu)(GtkMenu *m, int hunk);
-static int at = -1;
+static void (*on_menu)(GtkMenu *m, int hunk, int line);
+static int at = -1, one = -1;
 static const char *tags[][2] = {
 	{"head", "#57c"},
 	{"@", "#888"},
@@ -37,16 +37,22 @@ static gboolean click(GtkTextView *w, GdkEventButton *ev)
 static gboolean press(GtkTextView *w, GdkEventButton *ev)
 {
 	GtkTextIter a;
-	if (ev->button == 3) for (at = line(w, ev, &a); at >= 0 && gtk_text_iter_get_char(&a) != '@'; gtk_text_iter_backward_line(&a)) at--;
+	gunichar c;
+	if (ev->button == 3) {
+		one = at = line(w, ev, &a);
+		c = gtk_text_iter_get_char(&a);
+		for (; at >= 0 && gtk_text_iter_get_char(&a) != '@'; gtk_text_iter_backward_line(&a)) at--;
+		if (at < 0 || (c != '+' && c != '-')) one = -1;
+	}
 	return FALSE;
 }
 
 static void popup(GtkTextView *w, GtkWidget *m)
 {
-	if (on_menu && GTK_IS_MENU(m)) on_menu(GTK_MENU(m), at);
+	if (on_menu && GTK_IS_MENU(m)) on_menu(GTK_MENU(m), at, one);
 }
 
-GtkWidget *diff_view(void (*hunk)(int from, int to), void (*menu)(GtkMenu *m, int hunk))
+GtkWidget *diff_view(void (*hunk)(int from, int to), void (*menu)(GtkMenu *m, int hunk, int line))
 {
 	GtkWidget *s = gtk_scrolled_window_new(0, 0), *v = gtk_text_view_new();
 	int i;

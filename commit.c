@@ -13,11 +13,11 @@ static const char *verb[] = {"Stage", "Unstage", "Revert", "Ignore"}, *ask[][2] 
 	{"Revert changes in %d file%s?", "_Revert"},
 	{"Delete %d untracked file%s?", "_Delete"},
 	{"Revert this hunk in %s?", "_Revert"},
-	{"Revert the selected lines in %s?", "_Revert"}
+	{"Revert these lines in %s?", "_Revert"}
 };
 static const char use[] = {6, 1, 6, 4};
 static Entry *ent;
-static int nent, sec, busy, sorted, hunk, part, shut[3], geo[] = {1000, 700, 300, 0};
+static int nent, sec, busy, sorted, hunk, one, part, shut[3], geo[] = {1000, 700, 300, 0};
 static char *cur, *text, *conf;
 
 static void set(GtkTreeIter *it, char *m, int i, const char *icon, int n)
@@ -252,17 +252,18 @@ static void pick(GtkWidget *w, gpointer p)
 		context = k > 4 ? MAX(1, context / 2) : 2 * context;
 		sel(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
 	} else {
-		if (k & 1) diff_lines(&f, &t);
+		if (k & 1 && !diff_lines(&f, &t)) f = t = one;
 		if (k < 2 || sure(g_strdup_printf(ask[k][0], cur), ask[k][1])) done(apply(&o, text, f, t, k < 2 ? !sec : 2), &o);
 	}
 }
 
-static void menu(GtkMenu *m, int h)
+static void menu(GtkMenu *m, int h, int l)
 {
 	static const char *name[] = {"Stage hunk", "Stage lines", "Revert hunk", "Revert lines", "More context", "Less context", "Unstage hunk", "Unstage lines"};
 	GtkWidget *i;
-	int f, t, k, n = 0, has = diff_lines(&f, &t);
+	int f, t, k, n = 0, has = diff_lines(&f, &t) || l >= 0;
 	hunk = h;
+	one = l;
 	for (k = 0; k < 6; k++) {
 		if ((k == 2 || k == 3) && sec != 1) continue;
 		if (k == 4) gtk_menu_shell_insert(GTK_MENU_SHELL(m), gtk_separator_menu_item_new(), n++);

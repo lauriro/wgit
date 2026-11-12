@@ -41,7 +41,7 @@ The binary goes into a desktop image later, so it is built against Debian testin
   This is what lets a selection map straight onto `patch()`.
   A click on a line that starts with `@` calls the hunk callback with `(line, -1)`.
   A right click adds to the text view menu through the menu callback,
-  with the header line of the hunk under the pointer, or -1.
+  with the header line of the hunk under the pointer and the `+` or `-` line under it, each -1 if there is none.
 - `commit.c`: the commit window (`cmd_commit`).
 - `wgit.c`: the subcommand table and the prefix match.
 - `test.c`, `test.sh`: the test binary `wgit-test` and the script that drives it.

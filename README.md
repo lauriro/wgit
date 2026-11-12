@@ -40,7 +40,7 @@ a message box and Cancel, Rescan and Commit buttons below.
 - Click a hunk header (`@@ ...`) to stage or unstage that hunk.
 - Right-click the diff for more:
   Stage or Unstage hunk (the hunk under the pointer),
-  Stage or Unstage lines (the selected lines),
+  Stage or Unstage lines (the selected lines, or with no selection the `+` or `-` line under the pointer),
   Revert hunk and Revert lines (in Unstaged only, asks first),
   More context and Less context.
   Ctrl+C copies the selected text.
