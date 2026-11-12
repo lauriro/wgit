@@ -6,7 +6,7 @@
 #include "git.h"
 #include "ui.h"
 
-static GtkWidget *win, *list, *dv, *bar[4], *amend;
+static GtkWidget *list, *dv, *bar[4], *amend;
 static GtkTextBuffer *msg;
 static GtkTreeStore *store;
 static const char *head[] = {"Staged", "Unstaged", "Untracked"}, *arrow[] = {"pan-down-symbolic", "pan-end-symbolic"};
@@ -300,6 +300,7 @@ static void last(GtkToggleButton *b)
 
 static gboolean key(GtkWidget *w, GdkEventKey *ev)
 {
+	if (!gtk_widget_get_mapped(list)) return FALSE;
 	if (ev->keyval == GDK_KEY_F5) reload();
 	else if (ev->keyval == GDK_KEY_Delete && gtk_widget_has_focus(list) && gtk_widget_get_sensitive(bar[2])) run(0, GINT_TO_POINTER(2));
 	else if ((ev->keyval == GDK_KEY_Return || ev->keyval == GDK_KEY_KP_Enter) && ev->state & GDK_CONTROL_MASK) submit();
@@ -307,16 +308,17 @@ static gboolean key(GtkWidget *w, GdkEventKey *ev)
 	return TRUE;
 }
 
-int cmd_commit(const char *path)
+GtkWidget *commit_view(GtkWidget **pane)
 {
-	static const char *end[] = {"Commit", "Rescan", "Cancel"};
-	GCallback fn[] = {G_CALLBACK(submit), G_CALLBACK(reload), G_CALLBACK(gtk_window_close)};
-	GtkWidget *l, *r, *b, *m, *c, *pane[2];
+	static const char *end[] = {"Commit", "Rescan", "Cancel", "Log"};
+	GCallback fn[] = {G_CALLBACK(submit), G_CALLBACK(reload), G_CALLBACK(gtk_window_close), G_CALLBACK(flip)};
+	GtkWidget *l, *r, *b, *m, *c;
 	GtkTreeSelection *s;
-	char *top = repo(path);
 	int k;
-	if (!top) return fputs("wgit: not a git repository\n", stderr), 1;
-	win = window(top, "wgit");
+	if (pane[0]) {
+		reload();
+		return pane[0];
+	}
 	pane[0] = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
 	pane[1] = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
 	l = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -351,18 +353,16 @@ int cmd_commit(const char *path)
 	msg = gtk_text_view_get_buffer(GTK_TEXT_VIEW(m));
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), amend = gtk_check_button_new_with_label("Amend"), FALSE, FALSE, 0);
-	for (k = 0; k < 3; k++) {
+	for (k = 0; k < 4; k++) {
 		gtk_box_pack_end(GTK_BOX(b), c = gtk_button_new_with_label(end[k]), FALSE, FALSE, 0);
-		g_signal_connect_swapped(c, "clicked", fn[k], win);
+		g_signal_connect_swapped(c, "clicked", fn[k], k < 3 ? win : GINT_TO_POINTER(1));
 	}
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
 	gtk_paned_pack1(GTK_PANED(pane[0]), l, FALSE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[0]), pane[1], TRUE, TRUE);
-	gtk_paned_set_position(GTK_PANED(pane[0]), 300);
 	g_signal_connect(amend, "toggled", G_CALLBACK(last), 0);
 	g_signal_connect(win, "key-press-event", G_CALLBACK(key), 0);
 	reload();
-	loop(win, pane);
-	return 0;
+	return pane[0];
 }
 

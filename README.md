@@ -12,19 +12,22 @@ A small git UI for Wayland, written in C with GTK 3 only.
 
 ```sh
 $ make
-$ ./wgit c
+$ ./wgit
 ```
 
-`wgit commit` (or `wgit c`, any unique prefix) opens a commit window like gitg's:
+wgit is one window with two views, and the Log and Commit buttons switch between them.
+`wgit` alone opens the commit view when the repo has changes, else the log view.
+
+`wgit commit` (or `wgit c`, any unique prefix) opens the commit view, like gitg's:
 staged, unstaged and untracked files in one list on the left,
 the selected file's diff on the right,
-a message box and Cancel, Rescan and Commit buttons below.
-`wgit c <path>` works in the repo of that path.
-`wgit log` (or `wgit l`) shows the history: the graph of all branches at the left,
-the selected commit and its diff at the right.
+a message box and Log, Cancel, Rescan and Commit buttons below.
+`wgit log` (or `wgit l`) opens the log view, like gitk:
+the graph of all branches at the left, the selected commit and its diff at the right.
+`wgit c <path>` and `wgit l <path>` work in the repo of that path.
 
 
-## Commit window
+## Commit view
 
 - Select files with Ctrl+click or Shift+click, all in one section.
   Stage, Unstage, Revert and Ignore above the list work on the selected files.
@@ -51,7 +54,7 @@ the selected commit and its diff at the right.
   Unstage a file, hunk or line to take it out of the last commit.
 - Cancel closes wgit without a commit.
 - Drag the line over the message box to make the box higher.
-- wgit remembers the window size and the pane positions in `~/.local/state/wgit`.
+- wgit remembers the window size and the pane positions of each view in `~/.local/state/wgit`.
   It does not save the size of a maximized or fullscreen window.
 - wgit follows the dark or light colour scheme of the desktop (the freedesktop `color-scheme` setting)
   and switches while it runs.
@@ -86,9 +89,9 @@ and `test.sh` runs it against throwaway repos.
 
 - `git.c` runs git, parses the status and builds hunk and line patches. No GTK.
 - `diff-view.c` shows a diff, shared with a later `wgit log`.
-- `commit.c` is the commit window.
-- `log.c` is the history window.
-- `ui.c` is what all windows share: start, colour scheme and saved layout.
+- `commit.c` is the commit view.
+- `log.c` is the log view.
+- `ui.c` is the window: start, colour scheme, saved layout and the switch between the views.
 - `wgit.c` picks the subcommand.
 
 

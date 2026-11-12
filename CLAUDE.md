@@ -19,11 +19,12 @@ and implements only `org.freedesktop.portal.Settings` for `org.freedesktop.appea
 `ReadOne`, the older `Read` that wraps the value in one more variant (1 dark, 2 light),
 and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches.
 
-- `wgit` alone prints the usage and exits 0; an unknown subcommand exits 1.
-- `wgit c` / `wgit commit [path]` opens the commit window, like gitg's commit view.
-  Any unique prefix of a subcommand works.
-- `wgit l` / `wgit log [path]` opens the history browser, gitk-like:
+- wgit is one window with two views, commit and log; the Log and Commit buttons switch between them.
+  `wgit` alone opens the commit view if `git status` lists anything, else the log view.
+- `wgit c` / `wgit commit [path]` opens the commit view, like gitg's commit view.
+  `wgit l` / `wgit log [path]` opens the log view, gitk-like:
   the graph of `git log --graph --all` at the left, the selected commit and its diff at the right.
+  Any unique prefix of a subcommand works; an unknown one prints the usage and exits 1.
 
 ## Files
 
@@ -53,11 +54,12 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   A click on a line that starts with `@` calls the hunk callback with `(line, -1)`.
   A right click adds to the text view menu through the menu callback,
   with the header line of the hunk under the pointer and the `+` or `-` line under it, each -1 if there is none.
-- `commit.c`: the commit window (`cmd_commit`).
-- `log.c`: the history window (`cmd_log`); it checks the signature of the selected commit only, as `%G?` for all rows is slow.
-- `ui.c`, `ui.h`: what every window shares: `window()` starts GTK, follows the desktop colour scheme (`theme()`)
-  and restores the size and pane positions from a state file (`wgit` for commit, one name per window);
-  `loop()` sets the panes, shows the window and saves the layout on close.
+- `commit.c`: the commit view (`commit_view()`).
+- `log.c`: the log view (`log_view()`); it checks the signature of the selected commit only, as `%G?` for all rows is slow.
+- `ui.c`, `ui.h`: the window. `app()` checks the repo, starts GTK, follows the desktop colour scheme (`theme()`),
+  restores the window size and both views' pane positions from `~/.local/state/wgit` (six numbers)
+  and shows a view in a `GtkStack`. `flip()` switches the view: it builds a view the first time and reloads it after.
+  A view function builds its view when its pane array is empty and only reloads it otherwise.
 - `wgit.c`: the subcommand table and the prefix match.
 - `test.c`, `test.sh`: the test binary `wgit-test` and the script that drives it.
 - `Containerfile`: the local build image `wgit-build`.
@@ -171,7 +173,7 @@ git log --stat -1 >> $O/cached.txt
 xdotool mousemove 360 676 click 1; sleep 1; shot 8
 ```
 
-The window opens at 0,0 without decorations, 1000x700,
+`wgit c` opens at 0,0 without decorations, 1000x700,
 when `~/.local/state/wgit` (the size and pane positions saved on close) does not exist.
 At that size the file pane is 341 px wide; Stage, Unstage, Revert and Ignore are at 41, 127, 215 and 297, y 22.
 List rows are 23 px apart starting at y 57,
