@@ -5,22 +5,30 @@
 #include "diff-view.h"
 #include "git.h"
 
-static GtkWidget *win, *list, *bar[3], *pane[2], *lbtn, *amend;
+static GtkWidget *win, *list, *bar[4], *pane[2], *lbtn, *amend;
 static GtkTextBuffer *msg;
 static GtkTreeStore *store;
 static const char *head[] = {"Staged", "Unstaged", "Untracked"}, *arrow[] = {"pan-down-symbolic", "pan-end-symbolic"};
-static const char *verb[] = {"Stage", "Unstage", "Revert"}, *ask[][2] = {
+static const char *verb[] = {"Stage", "Unstage", "Revert", "Ignore"}, *ask[][2] = {
 	{"Revert changes in %d file%s?", "_Revert"},
 	{"Delete %d untracked file%s?", "_Delete"}
 };
+static const char use[] = {6, 1, 6, 4};
 static Entry *ent;
-static int nent, sec, busy, shut[3], geo[] = {1000, 700, 300, 0};
+static int nent, sec, busy, sorted, shut[3], geo[] = {1000, 700, 300, 0};
 static char *cur, *text, *conf;
 
 static void set(GtkTreeIter *it, char *m, int i, const char *icon, int n)
 {
 	gtk_tree_store_set(store, it, 0, m, 1, i, 2, icon, 3, n, -1);
 	g_free(m);
+}
+
+static GtkWidget *scroll(GtkWidget *w)
+{
+	GtkWidget *s = gtk_scrolled_window_new(0, 0);
+	gtk_container_add(GTK_CONTAINER(s), w);
+	return s;
 }
 
 static void sel(GtkTreeSelection *s)
@@ -49,7 +57,7 @@ static void sel(GtkTreeSelection *s)
 	diff_show(text);
 	gtk_button_set_label(GTK_BUTTON(lbtn), sec ? "Stage lines" : "Unstage lines");
 	gtk_widget_set_sensitive(lbtn, !!l);
-	for (k = 0; k < 3; k++) gtk_widget_set_sensitive(bar[k], l && (k == 1) == !sec);
+	for (k = 0; k < 4; k++) gtk_widget_set_sensitive(bar[k], l && use[k] >> sec & 1);
 	gtk_tree_path_free(p);
 	g_list_free_full(l, (GDestroyNotify)gtk_tree_path_free);
 }
@@ -109,6 +117,35 @@ static gboolean can(GtkTreeSelection *s, GtkTreeModel *m, GtkTreePath *p, gboole
 	return r;
 }
 
+static void skip(Entry **e, int n)
+{
+	GtkWidget *d = gtk_dialog_new_with_buttons("Ignore", GTK_WINDOW(win), GTK_DIALOG_MODAL, "_Cancel", GTK_RESPONSE_CANCEL, "_Ignore", GTK_RESPONSE_ACCEPT, NULL);
+	GtkWidget *c = gtk_dialog_get_content_area(GTK_DIALOG(d)), *t = gtk_text_view_new(), *s = gtk_check_button_new_with_label("Sort .gitignore"), *w;
+	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(t));
+	GtkTextIter i, j;
+	char *p = patterns(e, n), *o;
+	int r;
+	gtk_text_buffer_set_text(b, p, -1);
+	free(p);
+	gtk_text_view_set_monospace(GTK_TEXT_VIEW(t), TRUE);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(s), sorted);
+	gtk_box_set_spacing(GTK_BOX(c), 6);
+	gtk_container_set_border_width(GTK_CONTAINER(c), 6);
+	gtk_box_pack_start(GTK_BOX(c), w = gtk_label_new("Add to .gitignore, one pattern per line:"), FALSE, FALSE, 0);
+	gtk_label_set_xalign(GTK_LABEL(w), 0);
+	gtk_box_pack_start(GTK_BOX(c), w = scroll(t), TRUE, TRUE, 0);
+	gtk_widget_set_size_request(w, 400, 120);
+	gtk_box_pack_start(GTK_BOX(c), s, FALSE, FALSE, 0);
+	gtk_widget_show_all(c);
+	r = gtk_dialog_run(GTK_DIALOG(d));
+	sorted = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(s));
+	gtk_text_buffer_get_bounds(b, &i, &j);
+	p = gtk_text_buffer_get_text(b, &i, &j, FALSE);
+	gtk_widget_destroy(d);
+	if (r == GTK_RESPONSE_ACCEPT) done(ignore(&o, g_strstrip(p), sorted), &o);
+	g_free(p);
+}
+
 static void run(GtkWidget *w, gpointer k)
 {
 	GtkTreeModel *m;
@@ -124,14 +161,15 @@ static void run(GtkWidget *w, gpointer k)
 		e[n++] = ent + i;
 	}
 	g_list_free_full(l, (GDestroyNotify)gtk_tree_path_free);
-	if (n && op == 2) {
+	if (n && op == 3) skip(e, n);
+	else if (n && op == 2) {
 		d = gtk_message_dialog_new(GTK_WINDOW(win), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_CANCEL, ask[sec > 1][0], n, n > 1 ? "s" : "");
 		gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(d), "This cannot be undone.");
 		gtk_dialog_add_button(GTK_DIALOG(d), ask[sec > 1][1], GTK_RESPONSE_ACCEPT);
 		r = gtk_dialog_run(GTK_DIALOG(d));
 		gtk_widget_destroy(d);
 	}
-	if (n && r == GTK_RESPONSE_ACCEPT) done(files(&o, op, e, n), &o);
+	if (n && op < 3 && r == GTK_RESPONSE_ACCEPT) done(files(&o, op, e, n), &o);
 	free(e);
 }
 
@@ -221,13 +259,6 @@ static gboolean quit(GtkWidget *w)
 	return FALSE;
 }
 
-static GtkWidget *scroll(GtkWidget *w)
-{
-	GtkWidget *s = gtk_scrolled_window_new(0, 0);
-	gtk_container_add(GTK_CONTAINER(s), w);
-	return s;
-}
-
 int cmd_commit(const char *path)
 {
 	GtkWidget *l, *r, *b, *m, *c;
@@ -265,7 +296,7 @@ int cmd_commit(const char *path)
 	g_signal_connect(list, "button-press-event", G_CALLBACK(press), 0);
 	gtk_box_pack_start(GTK_BOX(l), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
 	gtk_container_set_border_width(GTK_CONTAINER(b), 6);
-	for (k = 0; k < 3; k++) {
+	for (k = 0; k < 4; k++) {
 		gtk_box_pack_start(GTK_BOX(b), bar[k] = gtk_button_new_with_label(verb[k]), TRUE, TRUE, 0);
 		g_signal_connect(bar[k], "clicked", G_CALLBACK(run), GINT_TO_POINTER(k));
 	}

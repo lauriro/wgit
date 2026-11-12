@@ -137,20 +137,20 @@ shot() { import -window root $O/$1.png; }
 xdotool mousemove 60 103 click 1; sleep 1
 xdotool mousemove 400 201 click 1; sleep 1; shot 3
 git diff --cached -U0 > $O/cached.txt
-xdotool mousemove 330 117 mousedown 1 mousemove 340 125 mousemove 345 134 mouseup 1; sleep 1
+xdotool mousemove 370 117 mousedown 1 mousemove 380 125 mousemove 385 134 mouseup 1; sleep 1
 xdotool mousemove 360 503 click 1; sleep 1; shot 5
 xdotool mousemove 600 600 click 1 type 'Hello commit'; xdotool key ctrl+Return; sleep 1
 git log --stat -1 >> $O/cached.txt
-xdotool mousemove 318 676 click 1; sleep 1; shot 8
+xdotool mousemove 360 676 click 1; sleep 1; shot 8
 ```
 
 The window opens at 0,0 without decorations, 1000x700,
 when `~/.local/state/wgit` (the size and pane positions saved on close) does not exist.
-At that size Stage, Unstage and Revert are at 48, 147 and 248, y 22.
+At that size the file pane is 341 px wide; Stage, Unstage, Revert and Ignore are at 41, 127, 215 and 297, y 22.
 List rows are 23 px apart starting at y 57,
 so with nothing staged the first unstaged row is at y 103.
 Diff lines are 17 px apart starting at y 14,
-the lines button is at 360,503, the message handle at y 527, Amend at 318,676, Commit at 950,676.
+the lines button is at 400,503, the message handle at y 527, Amend at 360,676, Commit at 950,676.
 Read the PNGs with the Read tool to see them.
 The window is still to be tried by the user on Wayland.
 
@@ -165,7 +165,7 @@ The window is still to be tried by the user on Wayland.
 ## The user's rules
 
 - The shortest general code that does the job, no frameworks.
-  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 32,344 bytes.
+  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 40,600 bytes.
 - No comments that say what the code does; a rare comment says why.
 - Tabs for indentation.
 - Every file except JSON starts with an empty line and ends with an empty line.

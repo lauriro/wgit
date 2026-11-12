@@ -16,6 +16,10 @@ a message box and a Commit button below.
 - Revert asks first.
   In Unstaged it takes the files back to their staged content.
   In Untracked it deletes the files.
+- Ignore (Untracked) opens a dialog with one `.gitignore` line per file,
+  the path from the repo root.
+  Change a line to a pattern if you like.
+  Sort .gitignore sorts each block of lines between empty lines.
 - Double-click a file to stage or unstage it.
 - Click a section title to collapse or open the section.
 - Click a hunk header (`@@ ...`) to stage or unstage that hunk.
