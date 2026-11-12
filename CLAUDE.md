@@ -190,6 +190,9 @@ so with nothing staged the first unstaged row is at y 103.
 Diff lines are 17 px apart starting at y 14,
 the message handle is at y 527, Amend at 360,676, Cancel, Rescan and Commit at 776, 861 and 950, y 676.
 In the diff menu, Stage hunk is 17 px and Stage lines 42 px below the right click.
+To check the log view, run `$W l` in a clone of `../litejs` (mount it read-only and `git clone` it in the container):
+the filter box is at y 20, list rows are 23 px apart from y 57,
+Expand all, Collapse all and Commit are at 507, 611 and 950, y 676.
 Read the PNGs with the Read tool to see them.
 To check the theme, add `dbus-daemon dbus-bin` to the image, run the script under `dbus-run-session --`,
 and start a small GDBus mock that owns `org.freedesktop.portal.Desktop` like tark-shell does,
@@ -209,7 +212,7 @@ The window is still to be tried by the user on Wayland.
 ## The user's rules
 
 - The shortest general code that does the job, no frameworks.
-  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 36,728 bytes.
+  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 57,904 bytes.
 - No comments that say what the code does; a rare comment says why.
 - Tabs for indentation.
 - Every file except JSON starts with an empty line and ends with an empty line.
