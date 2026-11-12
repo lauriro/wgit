@@ -16,6 +16,16 @@ static Row *row;
 static char *text, *query;
 static GtkTreeModel *filter;
 static int nrow;
+static const char sigs[] = "GUXYRBEN", *said[][2] = {
+	{"good", "✓ Good signature"},
+	{"warn", "✓ Good signature, unknown validity"},
+	{"warn", "✓ Good signature, expired"},
+	{"warn", "✓ Good signature, expired key"},
+	{"warn", "✓ Good signature, revoked key"},
+	{"bad", "✗ Bad signature"},
+	{"dim", "Cannot check the signature"},
+	{"dim", "No signature"}
+}, *ink[][2] = {{"dim", "#888"}, {"hash", "#c55"}, {"good", "#4a4"}, {"warn", "#c93"}, {"bad", "#e33"}};
 static const char *kind[][2] = {
 	{"HEAD -> refs/heads/", "#3d6b3d\" weight=\"bold"},
 	{"refs/heads/", "#3d6b3d"},
@@ -103,17 +113,100 @@ static gboolean paint(GtkTreeView *v, cairo_t *cr)
 	return FALSE;
 }
 
+static void put(const char *s, int len, const char *tag)
+{
+	GtkTextIter it;
+	char *t = g_utf8_make_valid(s, len);
+	gtk_text_buffer_get_end_iter(info, &it);
+	gtk_text_buffer_insert_with_tags_by_name(info, &it, t, -1, tag, NULL);
+	g_free(t);
+}
+
+static void field(const char *label, const char *value, const char *tag)
+{
+	put(label, -1, "dim");
+	put(value, -1, tag);
+}
+
+static void sign(int k, const char *who, const char *msg)
+{
+	int l = strcspn(msg, "\n");
+	put("\nSigned  ", -1, "dim");
+	put(said[k][1], -1, said[k][0]);
+	if (*who) put(" from ", -1, 0), put(who, -1, 0);
+	put("\n\n", -1, 0);
+	put(msg, l, "bold");
+	put(msg + l, -1, 0);
+}
+
+static int tag(const char *name)
+{
+	char *o, *v, *f[5], *p, *ref = g_strconcat("refs/tags/", name, NULL);
+	int k, r = git(&o, 0, (char *[]){"git", "for-each-ref", "--format=%(objecttype)%00%(*objectname)%00%(taggername) %(taggeremail)%00%(taggerdate:iso)%00%(contents:subject)%0a%(contents:body)", ref, 0});
+	g_free(ref);
+	if (r || strcmp(o, "tag")) return free(o), 0;
+	for (p = o, k = 0; k < 5; k++, p += strlen(p) + 1) f[k] = p;
+	r = git(&v, 0, (char *[]){"git", "verify-tag", (char *)name, 0});
+	gtk_text_buffer_set_text(info, "", 0);
+	field("Tag     ", name, "bold");
+	field(" → ", f[1], "hash");
+	field("\nTagger  ", f[2], 0);
+	field("  ", f[3], "dim");
+	sign(!r ? 0 : strstr(v, "no signature") ? 7 : 6, "", f[4]);
+	free(o);
+	free(v);
+	return 1;
+}
+
+static gboolean chip(GtkTreeView *v, GdkEventButton *ev)
+{
+	GtkTreePath *p;
+	GtkTreeViewColumn *c;
+	GtkTreeIter it;
+	PangoLayout *l;
+	PangoAttrIterator *a;
+	char *m, *t;
+	int x, i, s, e;
+	if (ev->button != 1 || !gtk_tree_view_get_path_at_pos(v, ev->x, ev->y, &p, &c, &x, 0)) return FALSE;
+	gtk_tree_model_get_iter(filter, &it, p);
+	gtk_tree_path_free(p);
+	gtk_tree_model_get(filter, &it, 0, &m, -1);
+	pango_layout_set_markup(l = gtk_widget_create_pango_layout(GTK_WIDGET(v), 0), m, -1);
+	if (c != graph && pango_layout_xy_to_index(l, (x - 4) * PANGO_SCALE, PANGO_SCALE, &i, &s)) {
+		a = pango_attr_list_get_iterator(pango_layout_get_attributes(l));
+		do {
+			pango_attr_iterator_range(a, &s, &e);
+			if (s <= i && i < e && pango_attr_iterator_get(a, PANGO_ATTR_BACKGROUND)) {
+				tag(t = g_strndup(pango_layout_get_text(l) + s + 1, e - s - 2));
+				g_free(t);
+			}
+		} while (pango_attr_iterator_next(a));
+		pango_attr_iterator_destroy(a);
+	}
+	g_object_unref(l);
+	g_free(m);
+	return FALSE;
+}
+
 static void pick(GtkTreeSelection *s)
 {
 	GtkTreeModel *m;
 	GtkTreeIter it;
-	char *o;
-	int i, n, a, d;
+	char *o, *f[8], *p;
+	int i, k, n, a, d;
 	if (!gtk_tree_selection_get_selected(s, &m, &it)) return;
 	gtk_tree_model_get(m, &it, 1, &i, -1);
 	if (!row[i].hash) return;
-	git(&o, 0, (char *[]){"git", "show", "-s", "--format=Commit  %H%nParent  %p%nAuthor  %an <%ae>  %ai%nSigned  %G? %GS%n%n%B%N", row[i].hash, 0});
-	gtk_text_buffer_set_text(info, o, -1);
+	if (!git(&o, 0, (char *[]){"git", "show", "-s", "--format=%H%x00%P%x00%an <%ae>%x00%ai%x00%G?%x00%GS%x00%B%x00%N", row[i].hash, 0})) {
+		for (p = o, k = 0; k < 8; k++, p += strlen(p) + 1) f[k] = p;
+		gtk_text_buffer_set_text(info, "", 0);
+		field("Commit  ", f[0], "hash");
+		field("\nParent  ", f[1], "hash");
+		field("\nAuthor  ", f[2], 0);
+		field("  ", f[3], "dim");
+		sign(*f[4] && strchr(sigs, *f[4]) ? strchr(sigs, *f[4]) - sigs : 7, f[5], f[6]);
+		if (*g_strchomp(f[7])) field("\nNotes\n", f[7], "note");
+	}
 	free(o);
 	free(text);
 	git(&text, 0, (char *[]){"git", "show", "--format=", "--no-color", "--no-ext-diff", "--diff-merges=first-parent", row[i].hash, 0});
@@ -195,11 +288,15 @@ GtkWidget *log_view(GtkWidget **pane)
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(list), FALSE);
 	gtk_tree_view_set_fixed_height_mode(GTK_TREE_VIEW(list), TRUE);
 	g_signal_connect(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), "changed", G_CALLBACK(pick), 0);
+	g_signal_connect(list, "button-release-event", G_CALLBACK(chip), 0);
 	v = gtk_text_view_new();
 	gtk_text_view_set_editable(GTK_TEXT_VIEW(v), FALSE);
 	gtk_text_view_set_monospace(GTK_TEXT_VIEW(v), TRUE);
 	gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(v), GTK_WRAP_WORD_CHAR);
 	info = gtk_text_view_get_buffer(GTK_TEXT_VIEW(v));
+	for (k = 0; k < 5; k++) gtk_text_buffer_create_tag(info, ink[k][0], "foreground", ink[k][1], NULL);
+	gtk_text_buffer_create_tag(info, "bold", "weight", PANGO_WEIGHT_BOLD, NULL);
+	gtk_text_buffer_create_tag(info, "note", "paragraph-background", "rgba(128,128,128,0.2)", NULL);
 	r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
 	gtk_box_pack_start(GTK_BOX(r), dv = diff_view(0, 0), TRUE, TRUE, 0);
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);

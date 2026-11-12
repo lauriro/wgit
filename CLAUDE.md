@@ -63,6 +63,8 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   over the full row height, so lines join: `|` vertical, `/` and `\` to the next column in the row below,
   `*` a dot with half lines to a `|` or `*` above and below. Colours go by column; a slash takes its right column.
   The filter box drives a `GtkTreeModelFilter`; while it has text, connector rows and the graph are hidden.
+  A button release on a row finds the chip under the pointer in the row's Pango layout (its background attribute);
+  `tag()` shows an annotated tag from `git for-each-ref` and `git verify-tag`, a lightweight tag changes nothing.
 - `ui.c`, `ui.h`: the window. `app()` checks the repo, starts GTK, follows the desktop colour scheme (`theme()`),
   restores the window size and both views' pane positions from `~/.local/state/wgit` (six numbers)
   and shows a view in a `GtkStack`. `flip()` switches the view: it builds a view the first time and reloads it after.
