@@ -117,21 +117,22 @@ sleep 1; export DISPLAY=:1
 $W c > $O/log.txt 2>&1 &
 sleep 2
 shot() { import -window root $O/$1.png; }
-xdotool mousemove 60 57 click 1; sleep 1
+xdotool mousemove 60 103 click 1; sleep 1
 xdotool mousemove 400 201 click 1; sleep 1; shot 3
 git diff --cached -U0 > $O/cached.txt
 xdotool mousemove 330 117 mousedown 1 mousemove 340 125 mousemove 345 134 mouseup 1; sleep 1
-xdotool mousemove 460 510 click 1; sleep 1; shot 5
+xdotool mousemove 360 510 click 1; sleep 1; shot 5
 xdotool mousemove 600 600 click 1 type 'Hello commit'; xdotool key ctrl+Return; sleep 1
 git log --stat -1 >> $O/cached.txt
 xdotool mousemove 318 676 click 1; sleep 1; shot 8
 ```
 
 The window opens at 0,0 without decorations, 1000x700.
-At that size list rows are 23 px apart starting at y 11,
-so with nothing staged the first unstaged row is at y 57.
+At that size Stage, Unstage and Revert are at 48, 147 and 248, y 22.
+List rows are 23 px apart starting at y 57,
+so with nothing staged the first unstaged row is at y 103.
 Diff lines are 17 px apart starting at y 14,
-the file and lines buttons are at y 510, Amend at 318,676, Commit at 950,676.
+the lines button is at 360,510, Amend at 318,676, Commit at 950,676.
 Read the PNGs with the Read tool to see them.
 The window is still to be tried by the user on Wayland.
 

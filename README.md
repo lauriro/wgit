@@ -11,7 +11,12 @@ a message box and a Commit button below.
 
 ## Use
 
-- Double-click a file, or press Stage file / Unstage file, to move the whole file.
+- Select files with Ctrl+click or Shift+click, all in one section.
+  Stage, Unstage and Revert above the list work on the selected files.
+- Revert asks first.
+  In Unstaged it takes the files back to their staged content.
+  In Untracked it deletes the files.
+- Double-click a file to stage or unstage it.
 - Click a section title to collapse or open the section.
 - Click a hunk header (`@@ ...`) to stage or unstage that hunk.
 - Select lines in the diff and press Stage lines / Unstage lines to move only those changes.
