@@ -68,6 +68,15 @@ the graph of all branches at the left, the selected commit and its diff at the r
 | `Delete`     | Revert the selected files, in the file list, asks first   |
 
 
+## Log view
+
+- The commits of all branches with their graph, as `git log --graph --all` draws it.
+- Each row: hash, refs as coloured boxes, subject, author and date.
+  The HEAD branch is bold green, other local branches green, remote branches grey, tags yellow.
+  A subject that starts with `!` (a breaking change) shows the `!` in bold red.
+- Click a commit to see its details, its signature and its diff at the right.
+
+
 ## Contributing
 
 The build machine needs no compiler, the build runs in Debian testing:

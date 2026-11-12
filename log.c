@@ -15,6 +15,35 @@ static GtkTextBuffer *info;
 static Row *row;
 static char *text;
 static int nrow;
+static const char *kind[][2] = {
+	{"HEAD -> refs/heads/", "#3d6b3d\" weight=\"bold"},
+	{"refs/heads/", "#3d6b3d"},
+	{"refs/remotes/", "#666"},
+	{"tag: refs/tags/", "#8a7420"},
+	{"HEAD", "#2f6fbf"}
+};
+
+static char *line(Row *r)
+{
+	GString *s = g_string_new(0);
+	char *p, *e, *t;
+	int k, l;
+	g_string_append_printf(s, "<span foreground=\"#c55\" font_family=\"monospace\">%s</span> ", r->hash);
+	for (p = r->refs; *p; p = e + 2 * !!*e) {
+		e = p + strcspn(p, ",");
+		for (k = 0; k < 5 && strncmp(p, kind[k][0], l = strlen(kind[k][0])); k++);
+		if (k == 5 || (k == 2 && !strncmp(e - 5, "/HEAD", 5))) continue;
+		if (k == 4) l = 0;
+		t = g_markup_escape_text(p + l, e - p - l);
+		g_string_append_printf(s, "<span background=\"%s\" foreground=\"#fff\"> %s </span> ", kind[k][1], t);
+		g_free(t);
+	}
+	k = *r->subject == '!';
+	t = g_markup_printf_escaped("%s  <span foreground=\"#4a4\">%s</span>  <span foreground=\"#39a\">%.16s</span>", r->subject + k, r->author, r->date);
+	g_string_append_printf(s, "%s%s", k ? "<span foreground=\"#e33\" weight=\"bold\">!</span>" : "", t);
+	g_free(t);
+	return g_string_free(s, FALSE);
+}
 static const char shape[] = "|/\\_-";
 static const double geom[][4] = {{0, 0, 0, 1}, {1, 0, -1, 1}, {-1, 0, 1, 1}, {-1, 1, 1, 1}, {-1, .5, 1, .5}};
 static const double pal[][3] = {{.29, .53, .91}, {.25, .68, .25}, {.88, .32, .32}, {.79, .64, .15}, {.75, .32, .75}, {.16, .65, .72}};
@@ -100,8 +129,7 @@ static void load(void)
 	for (i = 0; i < nrow; i++) {
 		k = strlen(row[i].graph);
 		if (k > w) w = k;
-		m = row[i].hash ? g_markup_printf_escaped("<span foreground=\"#c55\" font_family=\"monospace\">%s</span> %s  <span foreground=\"#4a4\">%s</span>  <span foreground=\"#39a\">%.16s</span>",
-			row[i].hash, row[i].subject, row[i].author, row[i].date) : g_strdup("");
+		m = row[i].hash ? line(row + i) : g_strdup("");
 		gtk_list_store_insert_with_values(store, 0, -1, 0, m, 1, i, -1);
 		g_free(m);
 	}
