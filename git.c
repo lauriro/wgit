@@ -190,10 +190,10 @@ char *patch(const char *d, int from, int to, int rev)
 	return 0;
 }
 
-int apply(char **out, const char *d, int from, int to, int rev)
+int apply(char **out, const char *d, int from, int to, int mode)
 {
-	char *p = patch(d, from, to, rev);
-	int r = p ? git(out, p, (char *[]){"git", "apply", "--cached", rev ? "-R" : "--cached", "-", 0}) : (*out = 0, 0);
+	char *p = patch(d, from, to, mode > 0);
+	int r = p ? git(out, p, (char *[]){"git", "apply", mode > 1 ? "-R" : "--cached", mode ? "-R" : "--cached", "-", 0}) : (*out = 0, 0);
 	free(p);
 	return r;
 }

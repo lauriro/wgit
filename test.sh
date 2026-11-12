@@ -132,6 +132,14 @@ check 'ignore keeps end' "$(printf '\n# build\nz.o\nb.o\n\nlog\n/x1y.txt\n\n.')"
 "$T" ignore-sorted 'x*y.txt'
 check 'ignore sorted' "$(printf '\n# build\nb.o\nz.o\n\n/x1y.txt\n/x\\*y.txt\nlog\n\n.')" "$(cat .gitignore; echo .)"
 
+# ---- Revert lines ----
+
+printf '1\n2\n3\n4\nX\nY\nZ\n7\n8\n9\n10\n' > b.txt
+"$T" discard b.txt "$(at '' b.txt '^-6')" "$(at '' b.txt '^+X')"
+check 'revert lines' "$(printf -- '-5\n+Y\n+Z')" "$(changes --cached; changes -- b.txt)"
+"$T" discard b.txt "$(at '' b.txt '^@@')"
+check 'revert hunk' '' "$(changes --cached; changes -- b.txt)"
+
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
 

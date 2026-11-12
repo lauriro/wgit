@@ -24,7 +24,8 @@ The binary goes into a desktop image later, so it is built against Debian testin
   It runs git (stdin in, stdout out; on failure the output is git's stderr),
   parses `git status --porcelain=v1 -z`,
   gets a file's diff (`--no-index` against `/dev/null` for an untracked file),
-  and builds hunk and line patches for `git apply --cached [-R] -`.
+  and builds hunk and line patches for `git apply --cached [-R] -`,
+  or `git apply -R -` on the work tree to revert lines.
   `files()` stages, unstages or reverts several files in one git run;
   revert checks out tracked files from the index and deletes untracked files with `git clean -f`.
   When `base` is set (`parent()`: HEAD^, or the empty tree on a root commit),
@@ -48,6 +49,7 @@ How a line patch is made (`patch()` in `git.c`):
 lines in the chosen range are kept;
 an unchosen `+` line is dropped and an unchosen `-` line becomes context when staging;
 for unstaging (`rev`, applied with `-R` to a `--cached` diff) the two rules swap.
+Revert uses the unstage rules on the work tree diff and applies with `-R` to the work tree.
 The hunk header counts are recomputed, the start numbers are kept.
 `to < 0` means the whole hunk whose header is at line `from`.
 
@@ -73,11 +75,12 @@ podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build sh -c 'make && make test'
 `wgit-test` with no arguments prints the status;
 `add|reset|revert FILE...` stages, unstages or reverts whole files;
 `ignore|ignore-sorted FILE...` adds the files' patterns to `.gitignore`;
-`stage|unstage FILE FROM [TO]` applies diff lines FROM..TO (0-based), or the hunk whose header is FROM;
+`stage|unstage|discard FILE FROM [TO]` stages, unstages or reverts diff lines FROM..TO (0-based), or the hunk whose header is FROM;
+an unknown command exits 2;
 `commit MSG` commits.
 A first argument `amend` sets `base`, and then `commit` amends.
 
-The 29 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
+The 31 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
 
 1. stage hunk: the second hunk of a file with two hunks is staged.
 2. other hunk stays: the first hunk stays unstaged.
@@ -108,8 +111,10 @@ The 29 tests in `test.sh`, checked against the index with `git diff --cached` or
 27. ignore file: a new `.gitignore` gets `/x\*y.txt`, which hides `x*y.txt` but not `x1y.txt`.
 28. ignore keeps end: a new line goes into the last block, above the trailing empty line.
 29. ignore sorted: each block between empty lines is sorted, the empty lines stay.
+30. revert lines: a removed and an added line are reverted in the work tree, the index stays.
+31. revert hunk: the rest of the hunk is reverted, the file is clean.
 
-The summary line is `29 passed, 0 failed`.
+The summary line is `31 passed, 0 failed`.
 
 ## Checking the window
 
