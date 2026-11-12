@@ -1,5 +1,6 @@
 
 #define _GNU_SOURCE
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -218,6 +219,60 @@ int files(char **out, int op, Entry **e, int n)
 	r = git(out, 0, a);
 	free(a);
 	return r;
+}
+
+char *patterns(Entry **e, int n)
+{
+	char *s, *p;
+	size_t len;
+	FILE *f = open_memstream(&s, &len);
+	for (; n--; e++) {
+		fputc('/', f);
+		for (p = (*e)->path; *p; fputc(*p++, f)) if (strchr("\\*?[", *p) || (*p == ' ' && !p[1])) fputc('\\', f);
+		if (n) fputc('\n', f);
+	}
+	fclose(f);
+	return s;
+}
+
+static int split(char ***l, int n, char *p)
+{
+	while (*p) {
+		*l = realloc(*l, (n + 1) * sizeof **l);
+		(*l)[n++] = p;
+		p += strcspn(p, "\n");
+		if (*p) *p++ = 0;
+	}
+	return n;
+}
+
+static int by(const void *a, const void *b)
+{
+	return strcmp(*(char **)a, *(char **)b);
+}
+
+int ignore(char **out, char *add, int sort)
+{
+	int fd = open(".gitignore", O_RDONLY), i, j, k, m, n;
+	char *s = fd < 0 ? calloc(1, 1) : slurp(fd), **l = 0;
+	FILE *f;
+	if (fd >= 0) close(fd);
+	for (k = n = split(&l, 0, s); k && !*l[k - 1]; k--);
+	m = split(&l, n, add) - n;
+	memmove(l + k, l + n, m * sizeof *l);
+	for (i = k + m, n += m; i < n; i++) l[i] = "";
+	for (i = 0; sort && i < n; i = j + 1) {
+		for (j = i; j < n && *l[j]; j++);
+		qsort(l + i, j - i, sizeof *l, by);
+	}
+	*out = 0;
+	if ((f = fopen(".gitignore", "w"))) {
+		for (i = 0; i < n; i++) fprintf(f, "%s\n", l[i]);
+		fclose(f);
+	} else *out = strdup("cannot write .gitignore");
+	free(l);
+	free(s);
+	return !f;
 }
 
 int commit(char **out, const char *msg, int amend)

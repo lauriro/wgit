@@ -31,6 +31,9 @@ The binary goes into a desktop image later, so it is built against Debian testin
   the staged side compares the index with `base` instead of HEAD, for amend:
   `status()` takes the staged letters from `git diff --cached --name-status base`,
   `diff()` diffs against it and unstage resets to it.
+  `patterns()` makes one `.gitignore` line per file, `/` plus the path with `\*?[` and a trailing space escaped.
+  `ignore()` adds lines to the root `.gitignore` above its trailing empty lines,
+  and optionally sorts each block between empty lines.
   `GIT_LITERAL_PATHSPECS=1` is set for every git run, so names with `:` or `*` are plain paths.
 - `diff-view.c`, `diff-view.h`: the coloured diff view, shared by commit and the later log.
   The buffer holds the diff line for line, so a buffer line number is a diff line number.
@@ -69,11 +72,12 @@ podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build sh -c 'make && make test'
 `make` builds `wgit` with `-Os -s`; `make test` builds `wgit-test` and runs `test.sh`.
 `wgit-test` with no arguments prints the status;
 `add|reset|revert FILE...` stages, unstages or reverts whole files;
+`ignore|ignore-sorted FILE...` adds the files' patterns to `.gitignore`;
 `stage|unstage FILE FROM [TO]` applies diff lines FROM..TO (0-based), or the hunk whose header is FROM;
 `commit MSG` commits.
 A first argument `amend` sets `base`, and then `commit` amends.
 
-The 26 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
+The 29 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
 
 1. stage hunk: the second hunk of a file with two hunks is staged.
 2. other hunk stays: the first hunk stays unstaged.
@@ -101,8 +105,11 @@ The 26 tests in `test.sh`, checked against the index with `git diff --cached` or
 24. amend unstage file: the whole file goes back to HEAD^, the work tree keeps the changes.
 25. amend drops a change: the amended commit holds only the change still staged.
 26. amend root commit: on the first commit the file shows as added and unstages to untracked.
+27. ignore file: a new `.gitignore` gets `/x\*y.txt`, which hides `x*y.txt` but not `x1y.txt`.
+28. ignore keeps end: a new line goes into the last block, above the trailing empty line.
+29. ignore sorted: each block between empty lines is sorted, the empty lines stay.
 
-The summary line is `26 passed, 0 failed`.
+The summary line is `29 passed, 0 failed`.
 
 ## Checking the window
 

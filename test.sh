@@ -119,6 +119,19 @@ mkdir root && cd root && git init -q && git config user.name t && git config use
 seq 2 > r.txt && git add r.txt && git commit -qm root
 check 'amend root commit' "$(printf 'A  r.txt\n?? r.txt')" "$("$T" amend; "$T" amend reset r.txt; "$T" amend)"
 
+# ---- Ignore ----
+
+cd ..
+rm -rf root
+touch 'x*y.txt' x1y.txt
+"$T" ignore 'x*y.txt'
+check 'ignore file' "$(printf '?? .gitignore\n?? x1y.txt\n/x\\*y.txt\n.')" "$("$T" | grep '^??'; cat .gitignore; echo .)"
+printf '\n# build\nz.o\nb.o\n\nlog\n\n' > .gitignore
+"$T" ignore x1y.txt
+check 'ignore keeps end' "$(printf '\n# build\nz.o\nb.o\n\nlog\n/x1y.txt\n\n.')" "$(cat .gitignore; echo .)"
+"$T" ignore-sorted 'x*y.txt'
+check 'ignore sorted' "$(printf '\n# build\nb.o\nz.o\n\n/x1y.txt\n/x\\*y.txt\nlog\n\n.')" "$(cat .gitignore; echo .)"
+
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
 
