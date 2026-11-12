@@ -5,8 +5,10 @@
 #include "diff-view.h"
 #include "git.h"
 
-static GtkWidget *win, *list[2], *fbtn, *lbtn, *amend;
+static GtkWidget *win, *list, *fbtn, *lbtn, *amend;
 static GtkTextBuffer *msg;
+static GtkListStore *store;
+static const char *head[] = {"Staged", "Unstaged", "Untracked"};
 static Entry *ent;
 static int nent, side, busy;
 static char *cur, *text;
@@ -27,32 +29,38 @@ static void show(void)
 	gtk_button_set_label(GTK_BUTTON(lbtn), side ? "Unstage lines" : "Stage lines");
 }
 
+static void add(GtkTreeIter *it, char *m, const char *path, int k)
+{
+	gtk_list_store_insert_with_values(store, it, -1, 0, m, 1, path, 2, k, -1);
+	g_free(m);
+}
+
 static void reload(void)
 {
-	GtkTreeIter it;
+	GtkTreeIter it, hit;
 	GtkTreePath *tp;
-	GtkListStore *s;
-	char c, *l;
-	int i, k, n, hit[2] = {-1, -1};
+	char c;
+	int i, k, s, any, hs = -1;
 	busy = 1;
 	ent = status(&nent);
-	for (k = 0; k < 2; k++) {
-		gtk_list_store_clear(s = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(list[k]))));
-		for (i = n = 0; i < nent; i++) {
-			if ((c = k ? ent[i].x : ent[i].y) == ' ' || (k && c == '?')) continue;
-			if (cur && !strcmp(cur, ent[i].path)) hit[k] = n;
-			l = g_strdup_printf("%c  %s", c, ent[i].path);
-			gtk_list_store_insert_with_values(s, &it, n++, 0, l, 1, ent[i].path, -1);
-			g_free(l);
+	gtk_list_store_clear(store);
+	for (k = 0; k < 3; k++) {
+		add(&it, g_strdup_printf("<b>%s</b>", head[k]), 0, -1);
+		for (i = any = 0; i < nent; i++) {
+			if ((c = k ? ent[i].y : ent[i].x) == ' ' || (c == '?') != (k == 2)) continue;
+			add(&it, g_markup_printf_escaped("%c  %s", c, ent[i].path), ent[i].path, s = !k);
+			if (cur && !strcmp(cur, ent[i].path) && (hs < 0 || s == side)) hit = it, hs = s;
+			any = 1;
 		}
+		if (!any) add(&it, g_strdup_printf("<span alpha=\"50%%\">No %c%s files</span>", head[k][0] | 32, head[k] + 1), 0, -1);
 	}
-	if (hit[side] < 0) side = !side;
-	if (hit[side] < 0) {
+	if (hs < 0) {
 		g_free(cur);
 		cur = 0;
 	} else {
-		tp = gtk_tree_path_new_from_indices(hit[side], -1);
-		gtk_tree_view_set_cursor(GTK_TREE_VIEW(list[side]), tp, 0, FALSE);
+		side = hs;
+		tp = gtk_tree_model_get_path(GTK_TREE_MODEL(store), &hit);
+		gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), tp, 0, FALSE);
 		gtk_tree_path_free(tp);
 	}
 	busy = 0;
@@ -71,17 +79,22 @@ static void done(int r, char **o)
 	reload();
 }
 
-static void sel(GtkTreeSelection *s, gpointer k)
+static gboolean can(GtkTreeSelection *s, GtkTreeModel *m, GtkTreePath *p)
+{
+	GtkTreeIter it;
+	int k;
+	gtk_tree_model_get_iter(m, &it, p);
+	gtk_tree_model_get(m, &it, 2, &k, -1);
+	return k >= 0;
+}
+
+static void sel(GtkTreeSelection *s)
 {
 	GtkTreeModel *m;
 	GtkTreeIter it;
 	if (busy || !gtk_tree_selection_get_selected(s, &m, &it)) return;
 	g_free(cur);
-	gtk_tree_model_get(m, &it, 1, &cur, -1);
-	side = GPOINTER_TO_INT(k);
-	busy = 1;
-	gtk_tree_selection_unselect_all(gtk_tree_view_get_selection(GTK_TREE_VIEW(list[!side])));
-	busy = 0;
+	gtk_tree_model_get(m, &it, 1, &cur, 2, &side, -1);
 	show();
 }
 
@@ -90,6 +103,11 @@ static void file(void)
 	Entry *e = find();
 	char *o;
 	if (e) done(stage(&o, e, side), &o);
+}
+
+static void act(GtkTreeView *v, GtkTreePath *p)
+{
+	if (can(0, gtk_tree_view_get_model(v), p)) file();
 }
 
 static void lines(int from, int to)
@@ -146,27 +164,23 @@ static GtkWidget *scroll(GtkWidget *w)
 
 int cmd_commit(const char *path)
 {
-	GtkWidget *h, *l, *r, *b, *m, *c;
+	GtkWidget *h, *r, *b, *m, *c;
 	char *top = repo(path);
-	int k;
 	if (!top) return fputs("wgit: not a git repository\n", stderr), 1;
 	setenv("NO_AT_BRIDGE", "1", 0);
 	g_set_prgname("wgit");
 	gtk_init(0, 0);
 	h = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
-	l = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
 	r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
 	win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title(GTK_WINDOW(win), top);
 	gtk_window_set_default_size(GTK_WINDOW(win), 1000, 700);
-	for (k = 0; k < 2; k++) {
-		list[k] = gtk_tree_view_new_with_model(GTK_TREE_MODEL(gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_STRING)));
-		gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list[k]), -1, k ? "Staged" : "Unstaged",
-			gtk_cell_renderer_text_new(), "text", 0, NULL);
-		g_signal_connect(gtk_tree_view_get_selection(GTK_TREE_VIEW(list[k])), "changed", G_CALLBACK(sel), GINT_TO_POINTER(k));
-		g_signal_connect(list[k], "row-activated", G_CALLBACK(file), 0);
-		(k ? gtk_paned_add2 : gtk_paned_add1)(GTK_PANED(l), scroll(list[k]));
-	}
+	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store = gtk_list_store_new(3, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT)));
+	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, gtk_cell_renderer_text_new(), "markup", 0, NULL);
+	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(list), FALSE);
+	gtk_tree_selection_set_select_function(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), (GtkTreeSelectionFunc)can, 0, 0);
+	g_signal_connect(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), "changed", G_CALLBACK(sel), 0);
+	g_signal_connect(list, "row-activated", G_CALLBACK(act), 0);
 	gtk_box_pack_start(GTK_BOX(r), diff_view(lines), TRUE, TRUE, 0);
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), fbtn = gtk_button_new(), FALSE, FALSE, 0);
@@ -179,10 +193,9 @@ int cmd_commit(const char *path)
 	gtk_box_pack_start(GTK_BOX(b), amend = gtk_check_button_new_with_label("Amend"), FALSE, FALSE, 0);
 	gtk_box_pack_end(GTK_BOX(b), c = gtk_button_new_with_label("Commit"), FALSE, FALSE, 0);
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
-	gtk_paned_pack1(GTK_PANED(h), l, FALSE, TRUE);
+	gtk_paned_pack1(GTK_PANED(h), scroll(list), FALSE, TRUE);
 	gtk_paned_pack2(GTK_PANED(h), r, TRUE, TRUE);
 	gtk_paned_set_position(GTK_PANED(h), 300);
-	gtk_paned_set_position(GTK_PANED(l), 340);
 	gtk_container_add(GTK_CONTAINER(win), h);
 	g_signal_connect(fbtn, "clicked", G_CALLBACK(file), 0);
 	g_signal_connect(lbtn, "clicked", G_CALLBACK(chosen), 0);

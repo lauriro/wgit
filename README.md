@@ -4,7 +4,7 @@
 A small git tool for Wayland, written in C with GTK 3 only.
 
 `wgit commit` (or `wgit c`, any unique prefix) opens a commit window like gitg's:
-unstaged and staged files on the left,
+staged, unstaged and untracked files in one list on the left,
 the selected file's diff on the right,
 a message box and a Commit button below.
 `wgit c <path>` works in the repo of that path.
