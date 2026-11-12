@@ -1,6 +1,6 @@
 
 CFLAGS ?= -Os -Wall
-LDFLAGS ?= -s
+LDFLAGS ?= -s -Wl,-z,noseparate-code
 GTK = `pkg-config --cflags --libs gtk+-3.0`
 
 wgit: wgit.c commit.c diff-view.c diff-view.h git.c git.h
