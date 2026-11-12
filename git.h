@@ -4,6 +4,7 @@ typedef struct {
 } Entry;
 
 extern char *base;
+extern int context;
 
 int git(char **out, const char *in, char **argv);
 char *parent(void);

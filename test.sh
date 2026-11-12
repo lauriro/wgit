@@ -140,6 +140,12 @@ check 'revert lines' "$(printf -- '-5\n+Y\n+Z')" "$(changes --cached; changes --
 "$T" discard b.txt "$(at '' b.txt '^@@')"
 check 'revert hunk' '' "$(changes --cached; changes -- b.txt)"
 
+# ---- Context ----
+
+sed -i 's/^2$/two/; s/^7$/seven/' b.txt
+"$T" -U1 stage b.txt "$(at -U1 b.txt '^@@' 2)"
+check 'less context' "$(printf -- '-7\n+seven')" "$(changes --cached)"
+
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
 

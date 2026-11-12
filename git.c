@@ -66,6 +66,7 @@ int git(char **out, const char *in, char **argv)
 }
 
 char *base;
+int context = 3;
 
 char *parent(void)
 {
@@ -128,8 +129,9 @@ Entry *status(int *n)
 
 char *diff(Entry *e, int cached)
 {
-	char *s, *u = !cached && e->y == '?' ? "--no-index" : 0;
-	git(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff",
+	char *s, *u = !cached && e->y == '?' ? "--no-index" : 0, c[16];
+	snprintf(c, sizeof c, "-U%d", context);
+	git(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", c,
 		cached ? "--cached" : u ? u : "-p", cached && base ? base : "-p", "--", u ? "/dev/null" : e->path, e->path, 0});
 	return s;
 }

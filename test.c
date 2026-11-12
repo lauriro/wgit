@@ -11,6 +11,7 @@ int main(int argc, char **argv)
 	char *o = 0;
 	Entry *e, **f = calloc(argc, sizeof *f);
 	if (argc > 1 && !strcmp(argv[1], "amend")) base = parent(), argv++, argc--;
+	if (argc > 1 && !strncmp(argv[1], "-U", 2)) context = atoi(argv[1] + 2), argv++, argc--;
 	e = status(&n);
 	for (i = 0; argc < 3 && i < n; i++) printf("%c%c %s%s%s\n", e[i].x, e[i].y, e[i].path, e[i].orig ? " < " : "", e[i].orig ? e[i].orig : "");
 	if (argc < 3) return 0;

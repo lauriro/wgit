@@ -79,8 +79,9 @@ podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build sh -c 'make && make test'
 an unknown command exits 2;
 `commit MSG` commits.
 A first argument `amend` sets `base`, and then `commit` amends.
+After it, `-U<n>` sets the diff context (`context`, 3 by default).
 
-The 31 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
+The 32 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
 
 1. stage hunk: the second hunk of a file with two hunks is staged.
 2. other hunk stays: the first hunk stays unstaged.
@@ -113,8 +114,9 @@ The 31 tests in `test.sh`, checked against the index with `git diff --cached` or
 29. ignore sorted: each block between empty lines is sorted, the empty lines stay.
 30. revert lines: a removed and an added line are reverted in the work tree, the index stays.
 31. revert hunk: the rest of the hunk is reverted, the file is clean.
+32. less context: with `-U1` two near changes are two hunks, and the second one is staged alone.
 
-The summary line is `31 passed, 0 failed`.
+The summary line is `32 passed, 0 failed`.
 
 ## Checking the window
 
