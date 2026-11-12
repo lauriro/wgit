@@ -10,6 +10,17 @@ int main(int argc, char **argv)
 	int i, j, n, k = 0, r = 0;
 	char *o = 0;
 	Entry *e, **f = calloc(argc, sizeof *f);
+	if (argc == 2 && !strcmp(argv[1], "log")) {
+		Row *w = history(&n);
+		const char *p;
+		char g[256], c[256];
+		for (i = 0; i < n; i++) {
+			for (p = w[i].graph, j = k = 0; (r = cell(&p, &k)); j++) g[j] = r, c[j] = '0' + k;
+			g[j] = c[j] = 0;
+			printf("%s\t%s\t%s\t%s\n", g, c, w[i].hash ? w[i].refs : "", w[i].hash ? w[i].subject : "");
+		}
+		return 0;
+	}
 	if (argc > 1 && !strcmp(argv[1], "amend")) base = parent(), argv++, argc--;
 	if (argc > 1 && !strncmp(argv[1], "-U", 2)) context = atoi(argv[1] + 2), argv++, argc--;
 	e = status(&n);

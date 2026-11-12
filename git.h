@@ -3,6 +3,10 @@ typedef struct {
 	char x, y, *path, *orig;
 } Entry;
 
+typedef struct {
+	char *graph, *hash, *refs, *author, *date, *subject;
+} Row;
+
 extern char *base;
 extern int context;
 
@@ -17,4 +21,6 @@ int files(char **out, int op, Entry **e, int n);
 char *patterns(Entry **e, int n);
 int ignore(char **out, char *add, int sort);
 int commit(char **out, const char *msg, int amend);
+Row *history(int *n);
+int cell(const char **p, int *color);
 

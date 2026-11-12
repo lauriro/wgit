@@ -146,6 +146,22 @@ sed -i 's/^2$/two/; s/^7$/seven/' b.txt
 "$T" -U1 stage b.txt "$(at -U1 b.txt '^@@' 2)"
 check 'less context' "$(printf -- '-7\n+seven')" "$(changes --cached)"
 
+# ---- Log ----
+
+mkdir ../log && cd ../log && git init -q -b main && git config user.name t && git config user.email t@t
+git commit -q --allow-empty -m one
+git checkout -q -b side && git commit -q --allow-empty -m two
+git checkout -q main && git commit -q --allow-empty -m three
+git merge -q --no-ff -m merge side && git tag -a v1 -m 'Version 1'
+check 'log graph' "$(printf '%s\t%s\t%s\n' \
+	'*   ' 'HEAD -> refs/heads/main, tag: refs/tags/v1' merge \
+	'|\  ' '' '' \
+	'| * ' refs/heads/side two \
+	'* | ' '' three \
+	'|/  ' '' '' \
+	'* ' '' one)" "$("$T" log | cut -f1,3-)"
+check 'log colours' '2300' "$("$T" log | sed -n 2p | cut -f2)"
+
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
 
