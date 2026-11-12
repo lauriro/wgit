@@ -17,7 +17,7 @@ static const char *verb[] = {"Stage", "Unstage", "Revert", "Ignore"}, *ask[][2] 
 };
 static const char use[] = {6, 1, 6, 4};
 static Entry *ent;
-static int nent, sec, busy, sorted, hunk, shut[3], geo[] = {1000, 700, 300, 0};
+static int nent, sec, busy, sorted, hunk, part, shut[3], geo[] = {1000, 700, 300, 0};
 static char *cur, *text, *conf;
 
 static void set(GtkTreeIter *it, char *m, int i, const char *icon, int n)
@@ -188,12 +188,51 @@ static void fold(GtkTreeView *v, GtkTreeIter *it, GtkTreePath *p, gpointer c)
 	gtk_tree_store_set(store, it, 2, arrow[shut[*gtk_tree_path_get_indices(p)] = GPOINTER_TO_INT(c)], -1);
 }
 
+static void all(GtkWidget *w, gpointer k)
+{
+	GtkTreeSelection *s = gtk_tree_view_get_selection(GTK_TREE_VIEW(list));
+	GtkTreePath *a = gtk_tree_path_new_from_indices(part, -1), *b;
+	GtkTreeIter it;
+	gtk_tree_view_expand_row(GTK_TREE_VIEW(list), a, FALSE);
+	gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &it, a);
+	b = gtk_tree_path_new_from_indices(part, gtk_tree_model_iter_n_children(GTK_TREE_MODEL(store), &it) - 1, -1);
+	gtk_tree_path_append_index(a, 0);
+	gtk_tree_selection_unselect_all(s);
+	gtk_tree_selection_select_range(s, a, b);
+	gtk_tree_path_free(a);
+	gtk_tree_path_free(b);
+	run(0, k);
+}
+
+static void heads(GtkTreePath *p, GdkEventButton *ev)
+{
+	static const char *name[] = {"Stage all", "Unstage all", "Revert all", "Ignore all", "Delete all"};
+	GtkWidget *m = gtk_menu_new(), *i;
+	GtkTreeIter it;
+	int k, n;
+	part = *gtk_tree_path_get_indices(p);
+	gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &it, p);
+	gtk_tree_model_get(GTK_TREE_MODEL(store), &it, 3, &n, -1);
+	for (k = 0; k < 4; k++) if (use[k] >> part & 1) {
+		i = gtk_menu_item_new_with_label(name[k == 2 && part == 2 ? 4 : k]);
+		gtk_widget_set_sensitive(i, n > 0);
+		g_signal_connect(i, "activate", G_CALLBACK(all), GINT_TO_POINTER(k));
+		gtk_menu_shell_append(GTK_MENU_SHELL(m), i);
+	}
+	g_signal_connect(m, "selection-done", G_CALLBACK(gtk_widget_destroy), 0);
+	gtk_widget_show_all(m);
+	gtk_menu_popup_at_pointer(GTK_MENU(m), (GdkEvent *)ev);
+}
+
 static gboolean press(GtkTreeView *v, GdkEventButton *ev)
 {
 	GtkTreePath *p;
 	int r = 0;
 	if (gtk_tree_view_get_path_at_pos(v, ev->x, ev->y, &p, 0, 0, 0)) {
-		if ((r = gtk_tree_path_get_depth(p) < 2) && ev->type == GDK_BUTTON_PRESS) act(v, p);
+		if ((r = gtk_tree_path_get_depth(p) < 2) && ev->type == GDK_BUTTON_PRESS) {
+			if (ev->button == 3) heads(p, ev);
+			else act(v, p);
+		}
 		gtk_tree_path_free(p);
 	}
 	return r;

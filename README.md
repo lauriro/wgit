@@ -22,6 +22,8 @@ a message box and a Commit button below.
   Sort .gitignore sorts each block of lines between empty lines.
 - Double-click a file to stage or unstage it.
 - Click a section title to collapse or open the section.
+- Right-click a section title for Stage all, Unstage all, Revert all, Delete all or Ignore all.
+  The section opens and all its files are selected first, so you see what changes.
 - Click a hunk header (`@@ ...`) to stage or unstage that hunk.
 - Right-click the diff for more:
   Stage or Unstage hunk (the hunk under the pointer),
