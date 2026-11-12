@@ -5,7 +5,7 @@
 #include "diff-view.h"
 #include "git.h"
 
-static GtkWidget *win, *list, *bar[4], *pane[2], *lbtn, *amend;
+static GtkWidget *win, *list, *bar[4], *pane[2], *amend;
 static GtkTextBuffer *msg;
 static GtkTreeStore *store;
 static const char *head[] = {"Staged", "Unstaged", "Untracked"}, *arrow[] = {"pan-down-symbolic", "pan-end-symbolic"};
@@ -57,8 +57,6 @@ static void sel(GtkTreeSelection *s)
 		text = diff(ent + k, !(sec = *gtk_tree_path_get_indices(p)));
 	}
 	diff_show(text);
-	gtk_button_set_label(GTK_BUTTON(lbtn), sec ? "Stage lines" : "Unstage lines");
-	gtk_widget_set_sensitive(lbtn, !!l);
 	for (k = 0; k < 4; k++) gtk_widget_set_sensitive(bar[k], l && use[k] >> sec & 1);
 	gtk_tree_path_free(p);
 	g_list_free_full(l, (GDestroyNotify)gtk_tree_path_free);
@@ -207,13 +205,6 @@ static void lines(int from, int to)
 	if (text) done(apply(&o, text, from, to, !sec), &o);
 }
 
-static void chosen(void)
-{
-	int f, t;
-	diff_lines(&f, &t);
-	lines(f, t);
-}
-
 static void pick(GtkWidget *w, gpointer p)
 {
 	int k = GPOINTER_TO_INT(p), f = hunk, t = -1;
@@ -338,8 +329,6 @@ int cmd_commit(const char *path)
 	}
 	gtk_box_pack_start(GTK_BOX(l), scroll(list), TRUE, TRUE, 0);
 	gtk_box_pack_start(GTK_BOX(r), diff_view(lines, menu), TRUE, TRUE, 0);
-	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(b), lbtn = gtk_button_new(), FALSE, FALSE, 0);
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
 	gtk_paned_pack1(GTK_PANED(pane[1]), r, TRUE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[1]), r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6), FALSE, FALSE);
@@ -355,7 +344,6 @@ int cmd_commit(const char *path)
 	gtk_paned_pack2(GTK_PANED(pane[0]), pane[1], TRUE, TRUE);
 	for (k = 0; k < 2; k++) if (geo[k + 2]) gtk_paned_set_position(GTK_PANED(pane[k]), geo[k + 2]);
 	gtk_container_add(GTK_CONTAINER(win), pane[0]);
-	g_signal_connect(lbtn, "clicked", G_CALLBACK(chosen), 0);
 	g_signal_connect(amend, "toggled", G_CALLBACK(last), 0);
 	g_signal_connect(c, "clicked", G_CALLBACK(submit), 0);
 	g_signal_connect(win, "key-press-event", G_CALLBACK(key), 0);
