@@ -150,6 +150,7 @@ int cmd_commit(const char *path)
 	char *top = repo(path);
 	int k;
 	if (!top) return fputs("wgit: not a git repository\n", stderr), 1;
+	setenv("NO_AT_BRIDGE", "1", 0);
 	gtk_init(0, 0);
 	h = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
 	l = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
