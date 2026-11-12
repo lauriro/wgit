@@ -10,7 +10,10 @@ The laptop runs a Debian testing (glibc) desktop with the dwl compositor.
 GTK 3.24 is already in the desktop's stack image, so wgit uses GTK 3 only:
 no GTK 4, no libadwaita, no other libraries.
 The binary goes into a desktop image later, so it is built against Debian testing.
-The desktop has no xdg-desktop-portal and no dconf.
+The desktop has no xdg-desktop-portal and no gsettings or dconf tools,
+but GTK reads GSettings through the dconf module from `~/.config/dconf/user` (written by `/usr/libexec/dconf-service`).
+An old Ubuntu copy of that file set `gtk-theme` to an uninstalled Yaru-dark and kept wgit light;
+the user renamed it to `user.ubuntu` on 2026-11-13.
 The bar, tark-shell, owns `org.freedesktop.portal.Desktop` on the session bus
 and implements only `org.freedesktop.portal.Settings` for `org.freedesktop.appearance` `color-scheme`:
 `ReadOne`, the older `Read` that wraps the value in one more variant (1 dark, 2 light),
@@ -174,6 +177,9 @@ answers `ReadOne` and `Read` and emits `SettingChanged` on a signal.
 The window is still to be tried by the user on Wayland.
 
 ## Known limits
+
+- GTK 3 drops the dark variant when `gtk-theme-name` names a theme that is not installed:
+  it falls back to plain Adwaita, light, whatever the colour scheme says.
 
 - A lone `\r` or a U+2029 in a diff line splits it into two buffer lines,
   so the line selection after it points at the wrong diff lines.
