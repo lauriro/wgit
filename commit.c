@@ -188,10 +188,14 @@ static void submit(void)
 static void last(GtkToggleButton *b)
 {
 	char *o;
+	free(base);
+	base = 0;
 	if (gtk_toggle_button_get_active(b) && !git(&o, 0, (char *[]){"git", "log", "-1", "--format=%B", 0})) {
 		gtk_text_buffer_set_text(msg, g_strchomp(o), -1);
 		free(o);
+		base = parent();
 	}
+	reload();
 }
 
 static gboolean key(GtkWidget *w, GdkEventKey *ev)

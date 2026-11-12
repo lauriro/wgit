@@ -22,6 +22,8 @@ a message box and a Commit button below.
 - Select lines in the diff and press Stage lines / Unstage lines to move only those changes.
   With no selection the button moves the line under the cursor.
 - Amend loads the last message and commits with `--amend`.
+  While Amend is on, Staged also shows the changes of the last commit.
+  Unstage a file, hunk or line to take it out of the last commit.
 - Drag the line over the message box to make the box higher.
 
 Keys:
