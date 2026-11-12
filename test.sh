@@ -160,6 +160,8 @@ check 'log graph' "$(printf '%s\t%s\t%s\n' \
 	'* | ' '' three \
 	'|/  ' '' '' \
 	'* ' '' one)" "$("$T" log)"
+git notes add -m 'A note' HEAD~1
+check 'log without notes' '' "$("$T" log | grep 'Notes added')"
 
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

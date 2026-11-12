@@ -43,7 +43,7 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   `patterns()` makes one `.gitignore` line per file, `/` plus the path with `\*?[` and a trailing space escaped.
   `ignore()` adds lines to the root `.gitignore` above its trailing empty lines,
   and optionally sorts each block between empty lines.
-  `history()` splits `git log --graph --all` into rows (graph, hash, refs, author, date, subject;
+  `history()` splits `git log --graph --all` (without `refs/notes`) into rows (graph, hash, refs, author, date, subject;
   a connector row such as `|/` has no hash).
   `GIT_LITERAL_PATHSPECS=1` is set for every git run, so names with `:` or `*` are plain paths.
 - `diff-view.c`, `diff-view.h`: the coloured diff view, shared by commit and log.
@@ -108,7 +108,7 @@ an unknown command exits 2;
 A first argument `amend` sets `base`, and then `commit` amends.
 After it, `-U<n>` sets the diff context (`context`, 3 by default).
 
-The 33 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
+The 34 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
 
 1. stage hunk: the second hunk of a file with two hunks is staged.
 2. other hunk stays: the first hunk stays unstaged.
@@ -143,8 +143,9 @@ The 33 tests in `test.sh`, checked against the index with `git diff --cached` or
 31. revert hunk: the rest of the hunk is reverted, the file is clean.
 32. less context: with `-U1` two near changes are two hunks, and the second one is staged alone.
 33. log graph: a branch and a merge give the graph rows, refs and subjects of `git log --graph`.
+34. log without notes: the commit that holds git notes is not in the history.
 
-The summary line is `33 passed, 0 failed`.
+The summary line is `34 passed, 0 failed`.
 
 ## Checking the window
 

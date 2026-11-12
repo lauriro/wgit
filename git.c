@@ -288,7 +288,7 @@ Row *history(int *n)
 	static Row *r;
 	char *p, *e, **f;
 	free(s);
-	if (git(&s, 0, (char *[]){"git", "log", "--graph", "--all", "--decorate=full",
+	if (git(&s, 0, (char *[]){"git", "log", "--graph", "--exclude=refs/notes/*", "--all", "--decorate=full",
 		"--format=%x1f%h%x1f%D%x1f%aN%x1f%ai%x1f%s", 0})) *s = 0;
 	for (*n = 0, p = s; *p; p = e, (*n)++) {
 		e = p + strcspn(p, "\n");
