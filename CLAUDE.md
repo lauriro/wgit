@@ -73,7 +73,7 @@ podman build -t wgit-build .
 podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build sh -c 'make && make test'
 ```
 
-`make` builds `wgit` with `-Os -s -Wl,-z,noseparate-code`; `make test` builds `wgit-test` and runs `test.sh`.
+`make` builds `wgit` with `-Os -fno-asynchronous-unwind-tables -s -Wl,-z,noseparate-code`; `make test` builds `wgit-test` and runs `test.sh`.
 `wgit-test` with no arguments prints the status;
 `add|reset|revert FILE...` stages, unstages or reverts whole files;
 `ignore|ignore-sorted FILE...` adds the files' patterns to `.gitignore`;

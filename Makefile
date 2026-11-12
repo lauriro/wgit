@@ -1,5 +1,5 @@
 
-CFLAGS ?= -Os -Wall
+CFLAGS ?= -Os -Wall -fno-asynchronous-unwind-tables
 LDFLAGS ?= -s -Wl,-z,noseparate-code
 GTK = `pkg-config --cflags --libs gtk+-3.0`
 
