@@ -13,7 +13,8 @@ static GtkTreeViewColumn *graph;
 static GtkListStore *store;
 static GtkTextBuffer *info;
 static Row *row;
-static char *text;
+static char *text, *query;
+static GtkTreeModel *filter;
 static int nrow;
 static const char *kind[][2] = {
 	{"HEAD -> refs/heads/", "#3d6b3d\" weight=\"bold"},
@@ -76,13 +77,13 @@ static gboolean paint(GtkTreeView *v, cairo_t *cr)
 	const double *g;
 	int i, k, x, y, ch;
 	double cx, h;
-	if (!gtk_tree_view_get_visible_range(v, &a, &b)) return FALSE;
+	if ((query && *query) || !gtk_tree_view_get_visible_range(v, &a, &b)) return FALSE;
 	cairo_set_line_width(cr, 2);
 	for (; gtk_tree_path_compare(a, b) <= 0; gtk_tree_path_next(a)) {
 		gtk_tree_view_get_background_area(v, a, graph, &r);
 		gtk_tree_view_convert_bin_window_to_widget_coords(v, r.x, r.y, &x, &y);
-		gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &it, a);
-		gtk_tree_model_get(GTK_TREE_MODEL(store), &it, 1, &i, -1);
+		gtk_tree_model_get_iter(filter, &it, a);
+		gtk_tree_model_get(filter, &it, 1, &i, -1);
 		for (p = row[i].graph, h = r.height, k = 0; p[k]; k++) {
 			cx = x + PAD + k * W + W / 2;
 			if (p[k] == '*') {
@@ -127,6 +128,28 @@ static void all(gpointer hide)
 	diff_fold(dv, GPOINTER_TO_INT(hide));
 }
 
+static gboolean shown(GtkTreeModel *m, GtkTreeIter *it)
+{
+	char *s, *f;
+	int i, r;
+	if (!query || !*query) return TRUE;
+	gtk_tree_model_get(m, it, 1, &i, -1);
+	if (!row[i].hash) return FALSE;
+	s = g_strjoin(" ", row[i].hash, row[i].refs, row[i].subject, row[i].author, NULL);
+	r = !!strstr(f = g_utf8_casefold(s, -1), query);
+	g_free(s);
+	g_free(f);
+	return r;
+}
+
+static void find(GtkEntry *e)
+{
+	g_free(query);
+	query = g_utf8_casefold(gtk_entry_get_text(e), -1);
+	gtk_tree_model_filter_refilter(GTK_TREE_MODEL_FILTER(filter));
+	gtk_tree_view_column_set_visible(graph, !*query);
+}
+
 static void load(void)
 {
 	GtkTreePath *p;
@@ -157,7 +180,9 @@ GtkWidget *log_view(GtkWidget **pane)
 		load();
 		return pane[0];
 	}
-	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_INT)));
+	filter = gtk_tree_model_filter_new(GTK_TREE_MODEL(store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_INT)), 0);
+	gtk_tree_model_filter_set_visible_func(GTK_TREE_MODEL_FILTER(filter), (GtkTreeModelFilterVisibleFunc)shown, 0, 0);
+	list = gtk_tree_view_new_with_model(filter);
 	graph = gtk_tree_view_column_new_with_attributes(0, gtk_cell_renderer_text_new(), NULL);
 	gtk_tree_view_column_set_sizing(graph, GTK_TREE_VIEW_COLUMN_FIXED);
 	gtk_tree_view_append_column(GTK_TREE_VIEW(list), graph);
@@ -190,7 +215,16 @@ GtkWidget *log_view(GtkWidget **pane)
 	pane[1] = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
 	gtk_paned_pack1(GTK_PANED(pane[1]), scroll(v), FALSE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[1]), r, TRUE, FALSE);
-	gtk_paned_pack1(GTK_PANED(pane[0]), scroll(list), FALSE, FALSE);
+	b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+	gtk_box_pack_start(GTK_BOX(b), c = gtk_search_entry_new(), FALSE, FALSE, 0);
+	gtk_entry_set_placeholder_text(GTK_ENTRY(c), "Filter: hash, ref, subject, author");
+	gtk_widget_set_margin_start(c, 6);
+	gtk_widget_set_margin_end(c, 6);
+	gtk_widget_set_margin_top(c, 6);
+	gtk_widget_set_margin_bottom(c, 6);
+	g_signal_connect(c, "search-changed", G_CALLBACK(find), 0);
+	gtk_box_pack_start(GTK_BOX(b), scroll(list), TRUE, TRUE, 0);
+	gtk_paned_pack1(GTK_PANED(pane[0]), b, FALSE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[0]), pane[1], TRUE, TRUE);
 	load();
 	return pane[0];

@@ -71,6 +71,8 @@ the graph of all branches at the left, the selected commit and its diff at the r
 ## Log view
 
 - The commits of all branches with their graph, as `git log --graph --all` draws it.
+- The filter box over the list keeps only the commits whose hash, refs, subject or author contain the text,
+  in any case. The graph is hidden while you filter.
 - Each row: hash, refs as coloured boxes, subject, author and date.
   The HEAD branch is bold green, other local branches green, remote branches grey, tags yellow.
   A subject that starts with `!` (a breaking change) shows the `!` in bold red.
