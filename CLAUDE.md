@@ -147,7 +147,7 @@ xdotool mousemove 60 103 click 1; sleep 1
 xdotool mousemove 400 201 click 1; sleep 1; shot 3
 git diff --cached -U0 > $O/cached.txt
 xdotool mousemove 370 117 mousedown 1 mousemove 380 125 mousemove 385 134 mouseup 1; sleep 1
-xdotool mousemove 385 134 click 3; sleep 1; xdotool mousemove 455 328 click 1; sleep 1; shot 5
+xdotool mousemove 385 134 click 3; sleep 1; xdotool mousemove 455 176 click 1; sleep 1; shot 5
 xdotool mousemove 600 600 click 1 type 'Hello commit'; xdotool key ctrl+Return; sleep 1
 git log --stat -1 >> $O/cached.txt
 xdotool mousemove 360 676 click 1; sleep 1; shot 8
@@ -160,7 +160,7 @@ List rows are 23 px apart starting at y 57,
 so with nothing staged the first unstaged row is at y 103.
 Diff lines are 17 px apart starting at y 14,
 the message handle is at y 527, Amend at 360,676, Commit at 950,676.
-In the diff menu, Stage hunk is 169 px and Stage lines 194 px below the right click.
+In the diff menu, Stage hunk is 17 px and Stage lines 42 px below the right click.
 Read the PNGs with the Read tool to see them.
 The window is still to be tried by the user on Wayland.
 

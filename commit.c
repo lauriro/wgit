@@ -222,16 +222,17 @@ static void menu(GtkMenu *m, int h)
 {
 	static const char *name[] = {"Stage hunk", "Stage lines", "Revert hunk", "Revert lines", "More context", "Less context", "Unstage hunk", "Unstage lines"};
 	GtkWidget *i;
-	int f, t, k, has = diff_lines(&f, &t);
+	int f, t, k, n = 0, has = diff_lines(&f, &t);
 	hunk = h;
 	for (k = 0; k < 6; k++) {
 		if ((k == 2 || k == 3) && sec != 1) continue;
-		if (k == 0 || k == 4) gtk_menu_shell_append(GTK_MENU_SHELL(m), gtk_separator_menu_item_new());
+		if (k == 4) gtk_menu_shell_insert(GTK_MENU_SHELL(m), gtk_separator_menu_item_new(), n++);
 		i = gtk_menu_item_new_with_label(name[k < 2 && !sec ? k + 6 : k]);
 		gtk_widget_set_sensitive(i, k < 4 ? (k & 1 ? has : h >= 0) : k == 4 || context > 1);
 		g_signal_connect(i, "activate", G_CALLBACK(pick), GINT_TO_POINTER(k));
-		gtk_menu_shell_append(GTK_MENU_SHELL(m), i);
+		gtk_menu_shell_insert(GTK_MENU_SHELL(m), i, n++);
 	}
+	gtk_menu_shell_insert(GTK_MENU_SHELL(m), gtk_separator_menu_item_new(), n);
 	gtk_widget_show_all(GTK_WIDGET(m));
 }
 
