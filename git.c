@@ -288,7 +288,7 @@ Row *history(int *n)
 	static Row *r;
 	char *p, *e, **f;
 	free(s);
-	if (git(&s, 0, (char *[]){"git", "log", "--graph", "--all", "--color=always", "--decorate=full",
+	if (git(&s, 0, (char *[]){"git", "log", "--graph", "--all", "--decorate=full",
 		"--format=%x1f%h%x1f%D%x1f%aN%x1f%ai%x1f%s", 0})) *s = 0;
 	for (*n = 0, p = s; *p; p = e, (*n)++) {
 		e = p + strcspn(p, "\n");
@@ -298,20 +298,6 @@ Row *history(int *n)
 		for (f = &r[*n].graph; f < &r[*n].subject && (p = strchr(p, 037)); *++f = ++p) *p = 0;
 	}
 	return r;
-}
-
-int cell(const char **p, int *color)
-{
-	char *q;
-	long v;
-	while (**p == 033) {
-		for (q = (char *)*p + 1; *q == '[' || *q == ';';) {
-			v = strtol(q + 1, &q, 10);
-			if (!v || (v > 29 && v < 38)) *color = v ? v - 29 : 0;
-		}
-		*p = q + !!*q;
-	}
-	return **p ? *(*p)++ : 0;
 }
 
 char *repo(const char *path)

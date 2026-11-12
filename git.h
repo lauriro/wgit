@@ -22,5 +22,4 @@ char *patterns(Entry **e, int n);
 int ignore(char **out, char *add, int sort);
 int commit(char **out, const char *msg, int amend);
 Row *history(int *n);
-int cell(const char **p, int *color);
 

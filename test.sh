@@ -159,8 +159,7 @@ check 'log graph' "$(printf '%s\t%s\t%s\n' \
 	'| * ' refs/heads/side two \
 	'* | ' '' three \
 	'|/  ' '' '' \
-	'* ' '' one)" "$("$T" log | cut -f1,3-)"
-check 'log colours' '2300' "$("$T" log | sed -n 2p | cut -f2)"
+	'* ' '' one)" "$("$T" log)"
 
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
