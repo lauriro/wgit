@@ -211,7 +211,7 @@ static GtkWidget *scroll(GtkWidget *w)
 
 int cmd_commit(const char *path)
 {
-	GtkWidget *h, *l, *r, *b, *m, *c;
+	GtkWidget *h, *l, *v, *r, *b, *m, *c;
 	GtkTreeSelection *s;
 	char *top = repo(path);
 	int k;
@@ -221,6 +221,7 @@ int cmd_commit(const char *path)
 	gtk_init(0, 0);
 	h = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
 	l = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+	v = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
 	r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
 	win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title(GTK_WINDOW(win), top);
@@ -248,7 +249,10 @@ int cmd_commit(const char *path)
 	gtk_box_pack_start(GTK_BOX(r), diff_view(lines), TRUE, TRUE, 0);
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), lbtn = gtk_button_new(), FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(r), b = scroll(m = gtk_text_view_new()), FALSE, FALSE, 0);
+	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
+	gtk_paned_pack1(GTK_PANED(v), r, TRUE, FALSE);
+	gtk_paned_pack2(GTK_PANED(v), r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6), FALSE, FALSE);
+	gtk_box_pack_start(GTK_BOX(r), b = scroll(m = gtk_text_view_new()), TRUE, TRUE, 0);
 	gtk_widget_set_size_request(b, -1, 120);
 	gtk_text_view_set_monospace(GTK_TEXT_VIEW(m), TRUE);
 	msg = gtk_text_view_get_buffer(GTK_TEXT_VIEW(m));
@@ -257,7 +261,7 @@ int cmd_commit(const char *path)
 	gtk_box_pack_end(GTK_BOX(b), c = gtk_button_new_with_label("Commit"), FALSE, FALSE, 0);
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
 	gtk_paned_pack1(GTK_PANED(h), l, FALSE, TRUE);
-	gtk_paned_pack2(GTK_PANED(h), r, TRUE, TRUE);
+	gtk_paned_pack2(GTK_PANED(h), v, TRUE, TRUE);
 	gtk_paned_set_position(GTK_PANED(h), 300);
 	gtk_container_add(GTK_CONTAINER(win), h);
 	g_signal_connect(lbtn, "clicked", G_CALLBACK(chosen), 0);

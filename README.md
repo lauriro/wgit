@@ -22,6 +22,7 @@ a message box and a Commit button below.
 - Select lines in the diff and press Stage lines / Unstage lines to move only those changes.
   With no selection the button moves the line under the cursor.
 - Amend loads the last message and commits with `--amend`.
+- Drag the line over the message box to make the box higher.
 
 Keys:
 
