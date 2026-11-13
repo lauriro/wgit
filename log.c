@@ -305,7 +305,8 @@ GtkWidget *log_view(GtkWidget **pane)
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
 	pane[0] = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
 	pane[1] = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
-	gtk_paned_pack1(GTK_PANED(pane[1]), scroll(v), FALSE, FALSE);
+	gtk_paned_pack1(GTK_PANED(pane[1]), v = scroll(v), FALSE, FALSE);
+	gtk_container_set_border_width(GTK_CONTAINER(v), 6);
 	gtk_paned_pack2(GTK_PANED(pane[1]), r, TRUE, FALSE);
 	b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	gtk_box_pack_start(GTK_BOX(b), c = gtk_search_entry_new(), FALSE, FALSE, 0);
