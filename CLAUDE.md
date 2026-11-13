@@ -62,7 +62,8 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
 - `commit.c`: the commit view (`commit_view()`).
 - `log.c`: the log view (`log_view()`); it checks the signature of the selected commit only, as `%G?` for all rows is slow.
   The graph column is empty; after GTK draws the visible rows, `paint()` draws their graph cells with cairo
-  over the full row height, so lines join: `|` vertical, `/` and `\` to the next column in the row below,
+  over the full row height, mirrored so the first column is next to the hash,
+  so lines join: `|` vertical, `/` and `\` to the next column in the row below,
   `*` a dot with half lines where `joins()` says so. Colours go by column; a slash takes its right column.
   The filter box drives a `GtkTreeModelFilter`; while it has text, connector rows and the graph are hidden.
   A button release on a row finds the chip under the pointer in the row's Pango layout (its background attribute);

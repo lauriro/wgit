@@ -15,7 +15,7 @@ static GtkTextBuffer *info;
 static Row *row;
 static char *text, *query;
 static GtkTreeModel *filter;
-static int nrow;
+static int nrow, cells;
 static const char sigs[] = "GUXYRBEN", *said[][2] = {
 	{"good", "✓ Good signature"},
 	{"warn", "✓ Good signature, unknown validity"},
@@ -90,7 +90,7 @@ static gboolean paint(GtkTreeView *v, cairo_t *cr)
 		gtk_tree_model_get_iter(filter, &it, a);
 		gtk_tree_model_get(filter, &it, 1, &i, -1);
 		for (p = row[i].graph, h = r.height, k = 0; p[k]; k++) {
-			cx = x + PAD + k * W + W / 2;
+			cx = x + PAD + (cells - 1 - k) * W + W / 2;
 			if (p[k] == '*') {
 				if (joins(i ? row[i - 1].graph : 0, k, 0)) stroke(cr, k, cx, y, cx, y + h / 2);
 				if (joins(i + 1 < nrow ? row[i + 1].graph : 0, k, 1)) stroke(cr, k, cx, y + h / 2, cx, y + h);
@@ -104,7 +104,7 @@ static gboolean paint(GtkTreeView *v, cairo_t *cr)
 				cairo_fill(cr);
 			} else if ((s = strchr(shape, p[k]))) {
 				g = geom[s - shape];
-				stroke(cr, k + (p[k] != '|'), cx + g[0] * W, y + g[1] * h, cx + g[2] * W, y + g[3] * h);
+				stroke(cr, k + (p[k] != '|'), cx - g[0] * W, y + g[1] * h, cx - g[2] * W, y + g[3] * h);
 			}
 		}
 	}
@@ -247,17 +247,18 @@ static void load(void)
 {
 	GtkTreePath *p;
 	char *m;
-	int i, k, w = 0;
+	int i, k;
 	gtk_list_store_clear(store);
+	cells = 0;
 	row = history(&nrow);
 	for (i = 0; i < nrow; i++) {
 		k = strlen(row[i].graph);
-		if (k > w) w = k;
+		if (k > cells) cells = k;
 		m = row[i].hash ? line(row + i) : g_strdup("");
 		gtk_list_store_insert_with_values(store, 0, -1, 0, m, 1, i, -1);
 		g_free(m);
 	}
-	gtk_tree_view_column_set_fixed_width(graph, 2 * PAD + w * W);
+	gtk_tree_view_column_set_fixed_width(graph, 2 * PAD + cells * W);
 	gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), p = gtk_tree_path_new_first(), 0, FALSE);
 	gtk_tree_path_free(p);
 }
