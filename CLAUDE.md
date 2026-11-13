@@ -45,6 +45,8 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   and optionally sorts each block between empty lines.
   `history()` splits `git log --graph --all` (without `refs/notes`) into rows (graph, hash, refs, author, date, subject;
   a connector row such as `|/` has no hash).
+  `joins()` says if a `*` at column k joins the row above or below: a `|` or `*` at k,
+  or a slash from the next column that ends or starts at k.
   `GIT_LITERAL_PATHSPECS=1` is set for every git run, so names with `:` or `*` are plain paths.
 - `diff-view.c`, `diff-view.h`: the coloured diff view, shared by commit and log.
   Each view keeps its callbacks on its own widget, so one window can hold several;
@@ -61,7 +63,7 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
 - `log.c`: the log view (`log_view()`); it checks the signature of the selected commit only, as `%G?` for all rows is slow.
   The graph column is empty; after GTK draws the visible rows, `paint()` draws their graph cells with cairo
   over the full row height, so lines join: `|` vertical, `/` and `\` to the next column in the row below,
-  `*` a dot with half lines to a `|` or `*` above and below. Colours go by column; a slash takes its right column.
+  `*` a dot with half lines where `joins()` says so. Colours go by column; a slash takes its right column.
   The filter box drives a `GtkTreeModelFilter`; while it has text, connector rows and the graph are hidden.
   A button release on a row finds the chip under the pointer in the row's Pango layout (its background attribute);
   `tag()` shows an annotated tag from `git for-each-ref` and `git verify-tag`, a lightweight tag changes nothing.
@@ -107,10 +109,11 @@ podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build sh -c 'make && make test'
 an unknown command exits 2;
 `commit MSG` commits;
 `log` prints the graph, the refs and the subject, tab-separated.
+`joins` prints each commit subject with `u` and `d` when its dot joins the row above and below.
 A first argument `amend` sets `base`, and then `commit` amends.
 After it, `-U<n>` sets the diff context (`context`, 3 by default).
 
-The 34 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
+The 35 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
 
 1. stage hunk: the second hunk of a file with two hunks is staged.
 2. other hunk stays: the first hunk stays unstaged.
@@ -146,8 +149,9 @@ The 34 tests in `test.sh`, checked against the index with `git diff --cached` or
 32. less context: with `-U1` two near changes are two hunks, and the second one is staged alone.
 33. log graph: a branch and a merge give the graph rows, refs and subjects of `git log --graph`.
 34. log without notes: the commit that holds git notes is not in the history.
+35. log joins: a dot joins a `|` above and below, the `\` it starts from and the `/` it goes into.
 
-The summary line is `34 passed, 0 failed`.
+The summary line is `35 passed, 0 failed`.
 
 ## Checking the window
 

@@ -59,11 +59,6 @@ static const char shape[] = "|/\\_-";
 static const double geom[][4] = {{0, 0, 0, 1}, {1, 0, -1, 1}, {-1, 0, 1, 1}, {-1, 1, 1, 1}, {-1, .5, 1, .5}};
 static const double pal[][3] = {{.29, .53, .91}, {.25, .68, .25}, {.88, .32, .32}, {.79, .64, .15}, {.75, .32, .75}, {.16, .65, .72}};
 
-static int at(int i, int k)
-{
-	return i >= 0 && i < nrow && k < (int)strlen(row[i].graph) ? row[i].graph[k] : 0;
-}
-
 static void colour(cairo_t *cr, int k)
 {
 	const double *c = pal[k / 2 % 6];
@@ -85,7 +80,7 @@ static gboolean paint(GtkTreeView *v, cairo_t *cr)
 	GdkRectangle r;
 	const char *p, *s;
 	const double *g;
-	int i, k, x, y, ch;
+	int i, k, x, y;
 	double cx, h;
 	if ((query && *query) || !gtk_tree_view_get_visible_range(v, &a, &b)) return FALSE;
 	cairo_set_line_width(cr, 2);
@@ -97,8 +92,8 @@ static gboolean paint(GtkTreeView *v, cairo_t *cr)
 		for (p = row[i].graph, h = r.height, k = 0; p[k]; k++) {
 			cx = x + PAD + k * W + W / 2;
 			if (p[k] == '*') {
-				if ((ch = at(i - 1, k)) == '|' || ch == '*') stroke(cr, k, cx, y, cx, y + h / 2);
-				if ((ch = at(i + 1, k)) == '|' || ch == '*') stroke(cr, k, cx, y + h / 2, cx, y + h);
+				if (joins(i ? row[i - 1].graph : 0, k, 0)) stroke(cr, k, cx, y, cx, y + h / 2);
+				if (joins(i + 1 < nrow ? row[i + 1].graph : 0, k, 1)) stroke(cr, k, cx, y + h / 2, cx, y + h);
 				colour(cr, k);
 				cairo_arc(cr, cx, y + h / 2, 3.5, 0, 2 * G_PI);
 				cairo_fill(cr);

@@ -300,6 +300,12 @@ Row *history(int *n)
 	return r;
 }
 
+int joins(const char *g, int k, int down)
+{
+	int n = g ? strlen(g) : 0;
+	return (k < n && (g[k] == '|' || g[k] == '*')) || (k > 0 && k <= n && g[k - 1] == "\\/"[down]) || (k + 1 < n && g[k + 1] == "/\\"[down]);
+}
+
 char *repo(const char *path)
 {
 	char *top;
