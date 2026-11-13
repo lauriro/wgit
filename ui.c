@@ -88,8 +88,7 @@ static void switched(GtkStack *s)
 
 GtkWidget *tabs(GtkWidget *w, GtkWidget *tools)
 {
-	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0), *h = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), *s = gtk_stack_switcher_new();
-	gtk_stack_switcher_set_stack(GTK_STACK_SWITCHER(s), GTK_STACK(stack));
+	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0), *h = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), *s = g_object_new(GTK_TYPE_STACK_SWITCHER, "stack", stack, NULL);
 	gtk_container_set_border_width(GTK_CONTAINER(h), 6);
 	gtk_box_pack_start(GTK_BOX(h), tools, FALSE, FALSE, 0);
 	gtk_box_pack_end(GTK_BOX(h), s, FALSE, FALSE, 0);
@@ -109,16 +108,14 @@ int app(const char *path, int v)
 	g_set_prgname("wgit");
 	gtk_init(0, 0);
 	theme();
-	if ((f = fopen(conf = g_build_filename(g_get_user_state_dir(), "wgit", NULL), "r"))) {
+	if ((f = fopen(conf = g_strdup_printf("%s/wgit", g_get_user_state_dir()), "r"))) {
 		fscanf(f, "%d %d %d %d %d %d", geo, geo + 1, geo + 2, geo + 3, geo + 4, geo + 5);
 		fclose(f);
 	}
-	win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-	gtk_window_set_title(GTK_WINDOW(win), top);
-	gtk_window_set_default_size(GTK_WINDOW(win), geo[0], geo[1]);
+	win = g_object_new(GTK_TYPE_WINDOW, "title", top, "default-width", geo[0], "default-height", geo[1], NULL);
 	gtk_container_add(GTK_CONTAINER(win), stack = gtk_stack_new());
 	for (k = 2; k--;) {
-		gtk_widget_show(page[k] = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
+		gtk_widget_show_all(page[k] = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
 		gtk_stack_add_titled(GTK_STACK(stack), page[k], title[k], title[k]);
 	}
 	gtk_stack_set_visible_child(GTK_STACK(stack), page[v]);

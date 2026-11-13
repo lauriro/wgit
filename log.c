@@ -63,7 +63,7 @@ static const double pal[][3] = {{.29, .53, .91}, {.25, .68, .25}, {.88, .32, .32
 static void colour(cairo_t *cr, int k)
 {
 	const double *c = pal[k / 2 % 6];
-	cairo_set_source_rgb(cr, c[0], c[1], c[2]);
+	cairo_set_source_rgba(cr, c[0], c[1], c[2], 1);
 }
 
 static void stroke(cairo_t *cr, int k, double x1, double y1, double x2, double y2)
@@ -87,7 +87,7 @@ static void fill(int from)
 		g_free(m);
 		ncom++;
 	}
-	gtk_tree_view_column_set_fixed_width(graph, 2 * PAD + cells * W);
+	g_object_set(graph, "fixed-width", 2 * PAD + cells * W, NULL);
 }
 
 static int stale(void)
@@ -110,7 +110,7 @@ static void load(void)
 	row = history(&nrow, limit = PAGE);
 	fill(0);
 	gtk_tree_view_set_model(GTK_TREE_VIEW(list), filter);
-	gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), p = gtk_tree_path_new_first(), 0, FALSE);
+	gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), p = gtk_tree_path_new_from_indices(0, -1), 0, FALSE);
 	gtk_tree_path_free(p);
 }
 
@@ -172,7 +172,7 @@ static gboolean paint(GtkTreeView *v, cairo_t *cr)
 		if (j < nrow) span(cr, i, j, cy, r.height);
 		k = strchr(row[i].graph, '*') - row[i].graph;
 		if (row[i].note) {
-			cairo_set_source_rgb(cr, .88, .75, .25);
+			cairo_set_source_rgba(cr, .88, .75, .25, 1);
 			cairo_rectangle(cr, col(k) - 4, cy - 4, 8, 8);
 		} else {
 			colour(cr, k);
@@ -302,9 +302,8 @@ static void find(GtkEntry *e)
 	query = g_utf8_casefold(gtk_entry_get_text(e), -1);
 	if (*query && ncom >= limit) more(GINT_TO_POINTER(1));
 	gtk_tree_model_filter_refilter(GTK_TREE_MODEL_FILTER(filter));
-	gtk_tree_view_column_set_visible(graph, !*query);
+	g_object_set(graph, "visible", !*query, NULL);
 }
-
 
 GtkWidget *log_view(GtkWidget **pane)
 {
@@ -320,22 +319,17 @@ GtkWidget *log_view(GtkWidget **pane)
 	gtk_tree_model_filter_set_visible_func(GTK_TREE_MODEL_FILTER(filter), (GtkTreeModelFilterVisibleFunc)shown, 0, 0);
 	list = gtk_tree_view_new_with_model(filter);
 	graph = gtk_tree_view_column_new_with_attributes(0, gtk_cell_renderer_text_new(), NULL);
-	gtk_tree_view_column_set_sizing(graph, GTK_TREE_VIEW_COLUMN_FIXED);
+	g_object_set(graph, "sizing", GTK_TREE_VIEW_COLUMN_FIXED, NULL);
 	gtk_tree_view_append_column(GTK_TREE_VIEW(list), graph);
 	g_signal_connect_after(list, "draw", G_CALLBACK(paint), 0);
 	g_object_set(t = gtk_cell_renderer_text_new(), "ellipsize", PANGO_ELLIPSIZE_END, NULL);
 	col = gtk_tree_view_column_new_with_attributes(0, t, "markup", 0, NULL);
-	gtk_tree_view_column_set_sizing(col, GTK_TREE_VIEW_COLUMN_FIXED);
-	gtk_tree_view_column_set_expand(col, TRUE);
+	g_object_set(col, "sizing", GTK_TREE_VIEW_COLUMN_FIXED, "expand", TRUE, NULL);
 	gtk_tree_view_append_column(GTK_TREE_VIEW(list), col);
-	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(list), FALSE);
-	gtk_tree_view_set_fixed_height_mode(GTK_TREE_VIEW(list), TRUE);
+	g_object_set(list, "headers-visible", FALSE, "fixed-height-mode", TRUE, NULL);
 	g_signal_connect(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), "changed", G_CALLBACK(pick), 0);
 	g_signal_connect(list, "button-release-event", G_CALLBACK(chip), 0);
-	v = gtk_text_view_new();
-	gtk_text_view_set_editable(GTK_TEXT_VIEW(v), FALSE);
-	gtk_text_view_set_monospace(GTK_TEXT_VIEW(v), TRUE);
-	gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(v), GTK_WRAP_WORD_CHAR);
+	v = g_object_new(GTK_TYPE_TEXT_VIEW, "editable", FALSE, "monospace", TRUE, "wrap-mode", GTK_WRAP_WORD_CHAR, NULL);
 	info = gtk_text_view_get_buffer(GTK_TEXT_VIEW(v));
 	for (k = 0; k < 5; k++) gtk_text_buffer_create_tag(info, ink[k][0], "foreground", ink[k][1], NULL);
 	gtk_text_buffer_create_tag(info, "bold", "weight", PANGO_WEIGHT_BOLD, NULL);
@@ -347,12 +341,7 @@ GtkWidget *log_view(GtkWidget **pane)
 	gtk_container_set_border_width(GTK_CONTAINER(v), 6);
 	gtk_widget_set_size_request(v, -1, 150);
 	b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-	gtk_box_pack_start(GTK_BOX(b), c = gtk_search_entry_new(), FALSE, FALSE, 0);
-	gtk_entry_set_placeholder_text(GTK_ENTRY(c), "Filter: hash, ref, subject, author");
-	gtk_widget_set_margin_start(c, 6);
-	gtk_widget_set_margin_end(c, 6);
-	gtk_widget_set_margin_top(c, 6);
-	gtk_widget_set_margin_bottom(c, 6);
+	gtk_box_pack_start(GTK_BOX(b), c = g_object_new(GTK_TYPE_SEARCH_ENTRY, "placeholder-text", "Filter: hash, ref, subject, author", "margin", 6, NULL), FALSE, FALSE, 0);
 	g_signal_connect(c, "search-changed", G_CALLBACK(find), 0);
 	gtk_box_pack_start(GTK_BOX(b), scroll(list), TRUE, TRUE, 0);
 	gtk_paned_pack1(GTK_PANED(pane[0]), b, FALSE, FALSE);

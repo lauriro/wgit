@@ -140,7 +140,7 @@ static int sure(char *q, const char *yes)
 	GtkWidget *d = gtk_message_dialog_new(GTK_WINDOW(win), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_CANCEL, "%s", q);
 	int r;
 	g_free(q);
-	gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(d), "This cannot be undone.");
+	g_object_set(d, "secondary-text", "This cannot be undone.", NULL);
 	gtk_dialog_add_button(GTK_DIALOG(d), yes, GTK_RESPONSE_ACCEPT);
 	r = gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT;
 	gtk_widget_destroy(d);
@@ -150,27 +150,22 @@ static int sure(char *q, const char *yes)
 static void skip(Entry **e, int n)
 {
 	GtkWidget *d = gtk_dialog_new_with_buttons("Ignore", GTK_WINDOW(win), GTK_DIALOG_MODAL, "_Cancel", GTK_RESPONSE_CANCEL, "_Ignore", GTK_RESPONSE_ACCEPT, NULL);
-	GtkWidget *c = gtk_dialog_get_content_area(GTK_DIALOG(d)), *t = gtk_text_view_new(), *s = gtk_check_button_new_with_label("Sort .gitignore"), *w;
+	GtkWidget *c = gtk_dialog_get_content_area(GTK_DIALOG(d)), *t = g_object_new(GTK_TYPE_TEXT_VIEW, "monospace", TRUE, NULL), *s = gtk_check_button_new_with_label("Sort .gitignore"), *w;
 	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(t));
-	GtkTextIter i, j;
 	char *p = patterns(e, n), *o;
 	int r;
 	gtk_text_buffer_set_text(b, p, -1);
 	free(p);
-	gtk_text_view_set_monospace(GTK_TEXT_VIEW(t), TRUE);
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(s), sorted);
-	gtk_box_set_spacing(GTK_BOX(c), 6);
-	gtk_container_set_border_width(GTK_CONTAINER(c), 6);
-	gtk_box_pack_start(GTK_BOX(c), w = gtk_label_new("Add to .gitignore, one pattern per line:"), FALSE, FALSE, 0);
-	gtk_label_set_xalign(GTK_LABEL(w), 0);
+	g_object_set(c, "spacing", 6, "border-width", 6, NULL);
+	gtk_box_pack_start(GTK_BOX(c), g_object_new(GTK_TYPE_LABEL, "label", "Add to .gitignore, one pattern per line:", "xalign", 0., NULL), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(c), w = scroll(t), TRUE, TRUE, 0);
 	gtk_widget_set_size_request(w, 400, 120);
 	gtk_box_pack_start(GTK_BOX(c), s, FALSE, FALSE, 0);
 	gtk_widget_show_all(c);
 	r = gtk_dialog_run(GTK_DIALOG(d));
 	sorted = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(s));
-	gtk_text_buffer_get_bounds(b, &i, &j);
-	p = gtk_text_buffer_get_text(b, &i, &j, FALSE);
+	g_object_get(b, "text", &p, NULL);
 	gtk_widget_destroy(d);
 	if (r == GTK_RESPONSE_ACCEPT) done(ignore(&o, g_strstrip(p), sorted), &o);
 	g_free(p);
@@ -180,8 +175,9 @@ static void run(GtkWidget *w, gpointer k)
 {
 	GtkTreeModel *m;
 	GtkTreeIter it;
-	GList *l = gtk_tree_selection_get_selected_rows(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), &m), *p;
-	Entry **e = malloc(g_list_length(l) * sizeof *e + 1);
+	GtkTreeSelection *s = gtk_tree_view_get_selection(GTK_TREE_VIEW(list));
+	GList *l = gtk_tree_selection_get_selected_rows(s, &m), *p;
+	Entry **e = malloc(gtk_tree_selection_count_selected_rows(s) * sizeof *e + 1);
 	int i, n = 0, op = GPOINTER_TO_INT(k);
 	char *o;
 	for (p = l; p; p = p->next) {
@@ -235,7 +231,7 @@ static void heads(GtkTreePath *p, GdkEventButton *ev)
 		i = gtk_menu_item_new_with_label(name[k == 2 && part == 2 ? 4 : k]);
 		gtk_widget_set_sensitive(i, n > 0);
 		g_signal_connect(i, "activate", G_CALLBACK(all), GINT_TO_POINTER(k));
-		gtk_menu_shell_append(GTK_MENU_SHELL(m), i);
+		gtk_menu_shell_insert(GTK_MENU_SHELL(m), i, -1);
 	}
 	g_signal_connect(m, "selection-done", G_CALLBACK(gtk_widget_destroy), 0);
 	gtk_widget_show_all(m);
@@ -296,11 +292,9 @@ static void menu(GtkMenu *m, int h)
 
 static void submit(void)
 {
-	GtkTextIter a, b;
 	char *s, *o;
 	int r;
-	gtk_text_buffer_get_bounds(msg, &a, &b);
-	s = gtk_text_buffer_get_text(msg, &a, &b, FALSE);
+	g_object_get(msg, "text", &s, NULL);
 	if (!(r = commit(&o, s, gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(amend))))) {
 		gtk_text_buffer_set_text(msg, "", 0);
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(amend), FALSE);
@@ -349,10 +343,9 @@ GtkWidget *commit_view(GtkWidget **pane)
 	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store = gtk_tree_store_new(4, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING, G_TYPE_INT)));
 	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, gtk_cell_renderer_pixbuf_new(), "icon-name", 2, "sensitive", 3, NULL);
 	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, gtk_cell_renderer_text_new(), "markup", 0, NULL);
-	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(list), FALSE);
-	gtk_tree_view_set_show_expanders(GTK_TREE_VIEW(list), FALSE);
+	g_object_set(list, "headers-visible", FALSE, "show-expanders", FALSE, NULL);
 	s = gtk_tree_view_get_selection(GTK_TREE_VIEW(list));
-	gtk_tree_selection_set_mode(s, GTK_SELECTION_MULTIPLE);
+	g_object_set(s, "mode", GTK_SELECTION_MULTIPLE, NULL);
 	gtk_tree_selection_set_select_function(s, (GtkTreeSelectionFunc)can, 0, 0);
 	g_signal_connect(s, "changed", G_CALLBACK(sel), 0);
 	g_signal_connect(list, "row-activated", G_CALLBACK(act), 0);
@@ -368,9 +361,8 @@ GtkWidget *commit_view(GtkWidget **pane)
 	gtk_box_pack_start(GTK_BOX(l), scroll(list), TRUE, TRUE, 0);
 	gtk_paned_pack1(GTK_PANED(pane[1]), gtk_widget_get_parent(dv = diff_view(lines, menu, top)), TRUE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[1]), r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6), FALSE, FALSE);
-	gtk_box_pack_start(GTK_BOX(r), b = scroll(m = gtk_text_view_new()), TRUE, TRUE, 0);
+	gtk_box_pack_start(GTK_BOX(r), b = scroll(m = g_object_new(GTK_TYPE_TEXT_VIEW, "monospace", TRUE, NULL)), TRUE, TRUE, 0);
 	gtk_widget_set_size_request(b, -1, 120);
-	gtk_text_view_set_monospace(GTK_TEXT_VIEW(m), TRUE);
 	msg = gtk_text_view_get_buffer(GTK_TEXT_VIEW(m));
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), amend = gtk_check_button_new_with_label("Amend"), FALSE, FALSE, 0);
