@@ -90,6 +90,7 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   The filter box drives a `GtkTreeModelFilter`; while it has text, the graph is hidden.
   A button release on a row finds the chip under the pointer in the row's Pango layout (its background attribute);
   `tag()` shows an annotated tag from `git for-each-ref` and `git verify-tag`, a lightweight tag changes nothing.
+  While the details show a tag (`tagged`), a release anywhere else on a row shows the commit again.
 - `ui.c`, `ui.h`: the window. `app()` checks the repo, starts GTK, follows the desktop colour scheme (`theme()`),
   restores the window size and both views' pane positions from `~/.local/state/wgit` (six numbers)
   and holds both views as pages of a `GtkStack`, with a `GtkStackSwitcher` in the bar that `tabs()` puts over each view's right side.

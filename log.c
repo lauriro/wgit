@@ -15,7 +15,7 @@ static GtkTextBuffer *info;
 static Row *row;
 static char *query, *seen;
 static GtkTreeModel *filter;
-static int nrow, cells, ncom, limit, pending;
+static int nrow, cells, ncom, limit, pending, tagged;
 static double x0;
 static const char sigs[] = "GUXYRBEN", *said[][2] = {
 	{"good", "✓ Good signature"},
@@ -206,6 +206,7 @@ static void details(int t, char **f, int sig)
 	static const char *label[][4] = {{"Commit  ", "\nParent  ", "\nAuthor  ", "  "}, {"Tag     ", " → ", "\nTagger  ", "  "}};
 	static const char *mark[] = {"hash", "hash", 0, "dim", "bold"};
 	int k, l;
+	tagged = t;
 	gtk_text_buffer_set_text(info, "", 0);
 	for (k = 0; k < 4; k++) {
 		put(label[t][k], -1, "dim");
@@ -217,6 +218,25 @@ static void details(int t, char **f, int sig)
 	put("\n\n", -1, 0);
 	put(f[6], l = strcspn(f[6], "\n"), "bold");
 	put(f[6] + l, -1, 0);
+}
+
+static void pick(GtkTreeSelection *s)
+{
+	GtkTreeModel *m;
+	GtkTreeIter it;
+	const char *p;
+	char *o, *f[9];
+	int i;
+	if (!gtk_tree_selection_get_selected(s, &m, &it)) return;
+	gtk_tree_model_get(m, &it, 1, &i, -1);
+	if (!git(&o, 0, (char *[]){"git", "show", "--format=%H%x00%P%x00%an <%ae>%x00%ai%x00%G?%x00%GS%x00%B%x00%N%x00",
+		"--no-color", "--no-ext-diff", "--diff-merges=first-parent", row[i].hash, 0})) {
+		cut(o, f, 9);
+		details(0, f, *f[4] && (p = strchr(sigs, *f[4])) ? p - sigs : 7);
+		if (*g_strchomp(f[7])) put("\nNotes\n", -1, "dim"), put(f[7], -1, "note");
+		diff_files(dv, f[8] + strspn(f[8], "\n"));
+	}
+	free(o);
 }
 
 static void tag(char *name)
@@ -242,8 +262,9 @@ static gboolean chip(GtkTreeView *v, GdkEventButton *ev)
 	PangoLayout *l;
 	PangoAttrIterator *a;
 	char *m, *t;
-	int x, i, s, e;
+	int x, i, s, e, was = tagged;
 	if (ev->button != 1 || !gtk_tree_view_get_path_at_pos(v, ev->x, ev->y, &p, &c, &x, 0)) return FALSE;
+	tagged = 0;
 	gtk_tree_model_get_iter(filter, &it, p);
 	gtk_tree_path_free(p);
 	gtk_tree_model_get(filter, &it, 0, &m, -1);
@@ -261,26 +282,8 @@ static gboolean chip(GtkTreeView *v, GdkEventButton *ev)
 	}
 	g_object_unref(l);
 	g_free(m);
+	if (was && !tagged) pick(gtk_tree_view_get_selection(v));
 	return FALSE;
-}
-
-static void pick(GtkTreeSelection *s)
-{
-	GtkTreeModel *m;
-	GtkTreeIter it;
-	const char *p;
-	char *o, *f[9];
-	int i;
-	if (!gtk_tree_selection_get_selected(s, &m, &it)) return;
-	gtk_tree_model_get(m, &it, 1, &i, -1);
-	if (!git(&o, 0, (char *[]){"git", "show", "--format=%H%x00%P%x00%an <%ae>%x00%ai%x00%G?%x00%GS%x00%B%x00%N%x00",
-		"--no-color", "--no-ext-diff", "--diff-merges=first-parent", row[i].hash, 0})) {
-		cut(o, f, 9);
-		details(0, f, *f[4] && (p = strchr(sigs, *f[4])) ? p - sigs : 7);
-		if (*g_strchomp(f[7])) put("\nNotes\n", -1, "dim"), put(f[7], -1, "note");
-		diff_files(dv, f[8] + strspn(f[8], "\n"));
-	}
-	free(o);
 }
 
 static gboolean shown(GtkTreeModel *m, GtkTreeIter *it)
