@@ -52,7 +52,7 @@ static char *line(Row *r)
 	}
 	k = *r->subject == '!';
 	t = g_markup_printf_escaped("%s  <span foreground=\"#4a4\">%s</span>  <span foreground=\"#39a\">%.16s</span>", r->subject + k, r->author, r->date);
-	g_string_append_printf(s, "%s%s", k ? "<span foreground=\"#e33\" weight=\"bold\">!</span>" : "", t);
+	g_string_append_printf(s, "%s%s", k ? "<span foreground=\"#e33\" weight=\"heavy\" size=\"125%\">!</span>" : "", t);
 	g_free(t);
 	return g_string_free(s, FALSE);
 }
