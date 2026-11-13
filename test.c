@@ -15,6 +15,11 @@ int main(int argc, char **argv)
 		for (i = 0; i < n; i++) printf("%s\t%s\t%s\n", w[i].graph, w[i].hash ? w[i].refs : "", w[i].hash ? w[i].subject : "");
 		return 0;
 	}
+	if (argc == 2 && !strcmp(argv[1], "notes")) {
+		Row *w = history(&n);
+		for (i = 0; i < n; i++) if (w[i].note) puts(w[i].subject);
+		return 0;
+	}
 	if (argc == 2 && !strcmp(argv[1], "joins")) {
 		Row *w = history(&n);
 		for (i = 0; i < n; i++) if (w[i].hash) {

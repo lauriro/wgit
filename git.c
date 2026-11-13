@@ -286,10 +286,11 @@ Row *history(int *n)
 {
 	static char *s;
 	static Row *r;
-	char *p, *e, **f;
+	char *p, *e, **f, *t, **h = 0;
+	int i, m = 0;
 	free(s);
 	if (git(&s, 0, (char *[]){"git", "log", "--graph", "--exclude=refs/notes/*", "--all", "--decorate=full",
-		"--format=%x1f%h%x1f%D%x1f%aN%x1f%ai%x1f%s", 0})) *s = 0;
+		"--format=%x1f%h%x1f%H%x1f%D%x1f%aN%x1f%ai%x1f%s", 0})) *s = 0;
 	for (*n = 0, p = s; *p; p = e, (*n)++) {
 		e = p + strcspn(p, "\n");
 		if (*e) *e++ = 0;
@@ -297,6 +298,16 @@ Row *history(int *n)
 		r[*n] = (Row){p};
 		for (f = &r[*n].graph; f < &r[*n].subject && (p = strchr(p, 037)); *++f = ++p) *p = 0;
 	}
+	if (!git(&t, 0, (char *[]){"git", "notes", "list", 0})) for (p = t; *p; p = e) {
+		e = p + strcspn(p, "\n");
+		if (*e) *e++ = 0;
+		h = realloc(h, (m + 1) * sizeof *h);
+		h[m++] = p + strcspn(p, " ") + 1;
+	}
+	if (m) qsort(h, m, sizeof *h, by);
+	for (i = 0; m && i < *n; i++) r[i].note = r[i].full && bsearch(&r[i].full, h, m, sizeof *h, by);
+	free(h);
+	free(t);
 	return r;
 }
 

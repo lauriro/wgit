@@ -43,8 +43,8 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   `patterns()` makes one `.gitignore` line per file, `/` plus the path with `\*?[` and a trailing space escaped.
   `ignore()` adds lines to the root `.gitignore` above its trailing empty lines,
   and optionally sorts each block between empty lines.
-  `history()` splits `git log --graph --all` (without `refs/notes`) into rows (graph, hash, refs, author, date, subject;
-  a connector row such as `|/` has no hash).
+  `history()` splits `git log --graph --all` (without `refs/notes`) into rows (graph, hash, full hash, refs, author, date, subject;
+  a connector row such as `|/` has no hash); `note` marks a commit listed by `git notes list`.
   `joins()` says if a `*` at column k joins the row above or below: a `|` or `*` at k,
   or a slash from the next column that ends or starts at k.
   `GIT_LITERAL_PATHSPECS=1` is set for every git run, so names with `:` or `*` are plain paths.
@@ -110,10 +110,11 @@ an unknown command exits 2;
 `commit MSG` commits;
 `log` prints the graph, the refs and the subject, tab-separated.
 `joins` prints each commit subject with `u` and `d` when its dot joins the row above and below.
+`notes` prints the subjects of the commits that have git notes.
 A first argument `amend` sets `base`, and then `commit` amends.
 After it, `-U<n>` sets the diff context (`context`, 3 by default).
 
-The 35 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
+The 36 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
 
 1. stage hunk: the second hunk of a file with two hunks is staged.
 2. other hunk stays: the first hunk stays unstaged.
@@ -150,8 +151,9 @@ The 35 tests in `test.sh`, checked against the index with `git diff --cached` or
 33. log graph: a branch and a merge give the graph rows, refs and subjects of `git log --graph`.
 34. log without notes: the commit that holds git notes is not in the history.
 35. log joins: a dot joins a `|` above and below, the `\` it starts from and the `/` it goes into.
+36. log notes: the commit with a git note is marked.
 
-The summary line is `35 passed, 0 failed`.
+The summary line is `36 passed, 0 failed`.
 
 ## Checking the window
 

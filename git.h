@@ -4,7 +4,8 @@ typedef struct {
 } Entry;
 
 typedef struct {
-	char *graph, *hash, *refs, *author, *date, *subject;
+	char *graph, *hash, *full, *refs, *author, *date, *subject;
+	int note;
 } Row;
 
 extern char *base;

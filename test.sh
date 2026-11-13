@@ -165,6 +165,7 @@ check 'log without notes' '' "$("$T" log | grep 'Notes added')"
 git checkout -q -b dev && git commit -q --allow-empty -m dev1
 git checkout -q main && GIT_COMMITTER_DATE=2030-01-01T00:00:00 git commit -q --allow-empty -m four
 check 'log joins' "$(printf '%s\n' 'four -d' 'dev1 -d' 'merge ud' 'two ud' 'three ud' 'one u-')" "$("$T" joins)"
+check 'log notes' three "$("$T" notes)"
 
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
