@@ -52,7 +52,8 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   `core.quotePath=false` is set the same way through `GIT_CONFIG_COUNT`, so a diff names a file as `git status -z` does.
 - `diff-view.c`, `diff-view.h`: the coloured diff view, shared by commit and log.
   Each view keeps its callbacks on its own widget, so one window can hold several;
-  `diff_show()` and `diff_lines()` take the view.
+  `diff_view()` returns the text view, and its parent is the scrolled window to pack;
+  every other function takes the text view.
   `diff_files()` shows a diff of many files, in both views: a bold title line per file (`▾ path +a −d`,
   in the GTK font with the `pan-down-symbolic` or `pan-end-symbolic` icon, as the commit view list has)
   instead of the `diff --git`, `index`, `---` and `+++` lines; a click on a title hides its lines with an invisible tag,
@@ -68,15 +69,18 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   unless more than one file is selected, and `follow` keeps `sel()` from scrolling the diff back.
   A click on a line that starts with `@` calls the hunk callback with `(line, -1)`.
   A right click adds to the text view menu through the menu callback,
-  with the header line of the hunk under the pointer and the `+` or `-` line under it, each -1 if there is none.
+  with the header line of the hunk under the pointer, -1 if there is none.
+  `diff_lines()` gives the selected lines, or without a selection the `+` or `-` line under the last right click.
 - `commit.c`: the commit view (`commit_view()`); it shows the diff of the whole section of the selected file
   and, within that section, only scrolls to the file.
 - `log.c`: the log view (`log_view()`); it checks the signature of the selected commit only, as `%G?` for all rows is slow.
+  One `git show` run gives the details and the diff of the selected commit: the format ends with a NUL and the diff comes after it.
+  `details()` prints the first fields of a commit or an annotated tag from one label table.
   The list holds commit rows only; connector lines such as `|/` get no row.
   It loads 10,000 commits at a time: when `paint()` draws the last row of a full page, `more()` reruns
   `history()` with a bigger limit and `fill()` adds only the new rows, so selection and scroll stay.
   A filter search loads all commits first.
-  `stale()` keys the refs (`git for-each-ref` with `%(HEAD)`, and `git rev-parse HEAD`); a switch to the log view
+  `stale()` keys the refs (`git for-each-ref --include-root-refs` with `%(HEAD)`, so a detached HEAD counts too; it needs git 2.45); a switch to the log view
   reloads only when the key changed, and `more()` reloads in full instead of adding a page then.
   The graph column is empty; after GTK draws the visible rows, `paint()` draws the graph with cairo,
   mirrored so the first column is next to the hash. `span()` maps the git text lines from one commit to the next
@@ -121,7 +125,12 @@ podman build -t wgit-build .
 podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build sh -c 'make && make test'
 ```
 
-`make` builds `wgit` with `-Os -fno-asynchronous-unwind-tables -s -Wl,-z,noseparate-code`; `make test` builds `wgit-test` and runs `test.sh`.
+`make` builds `wgit` with `-Os -fno-asynchronous-unwind-tables -fno-plt -s -Wl,-z,noseparate-code,-z,pack-relative-relocs,--build-id=none`;
+`make test` builds `wgit-test` and runs `test.sh`.
+Packed relocations need glibc 2.36 or later at run time.
+Each imported function costs about 90 bytes in the symbol tables, so a property set with `g_object_set` or `g_object_new`
+is smaller than a setter that is used once.
+The RELRO part ends on a page boundary, so the file size changes in steps of 4096 bytes.
 `wgit-test` with no arguments prints the status;
 `add|reset|revert FILE...` stages, unstages or reverts whole files;
 `ignore|ignore-sorted FILE...` adds the files' patterns to `.gitignore`;
@@ -246,7 +255,7 @@ The window is still to be tried by the user on Wayland.
 ## The user's rules
 
 - The shortest general code that does the job, no frameworks.
-  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 66,384 bytes.
+  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 55,904 bytes.
 - No comments that say what the code does; a rare comment says why.
 - Tabs for indentation.
 - Every file except JSON starts with an empty line and ends with an empty line.
