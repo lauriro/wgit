@@ -16,6 +16,7 @@ static Row *row;
 static char *text, *query;
 static GtkTreeModel *filter;
 static int nrow, cells;
+static double x0;
 static const char sigs[] = "GUXYRBEN", *said[][2] = {
 	{"good", "✓ Good signature"},
 	{"warn", "✓ Good signature, unknown validity"},
@@ -73,40 +74,59 @@ static void stroke(cairo_t *cr, int k, double x1, double y1, double x2, double y
 	cairo_stroke(cr);
 }
 
+static double col(int k)
+{
+	return x0 + PAD + (cells - 1 - k) * W + W / 2;
+}
+
+static void span(cairo_t *cr, int a, int b, double ya, double h)
+{
+	const char *p, *s;
+	const double *g;
+	double t0, t1, c, sc = h / (b - a), y0 = ya - (a + .5) * sc;
+	int j, k;
+	for (j = a; j <= b; j++) for (p = row[j].graph, t0 = j == a ? .5 : 0, t1 = j == b ? .5 : 1, k = 0; p[k]; k++) {
+		c = col(k);
+		if (p[k] == '*') {
+			if (j == a ? joins(row[a + 1].graph, k, 1) : joins(row[b - 1].graph, k, 0)) stroke(cr, k, c, y0 + (j + t0) * sc, c, y0 + (j + t1) * sc);
+		} else if ((s = strchr(shape, p[k]))) {
+			g = geom[s - shape];
+			if (g[1] != g[3]) stroke(cr, k + (p[k] != '|'), c - (g[0] + (g[2] - g[0]) * t0) * W, y0 + (j + t0) * sc,
+				c - (g[0] + (g[2] - g[0]) * t1) * W, y0 + (j + t1) * sc);
+			else if (j < b) stroke(cr, k + 1, c - g[0] * W, y0 + (j + g[1]) * sc, c - g[2] * W, y0 + (j + g[3]) * sc);
+		}
+	}
+}
+
 static gboolean paint(GtkTreeView *v, cairo_t *cr)
 {
 	GtkTreePath *a, *b;
 	GtkTreeIter it;
 	GdkRectangle r;
-	const char *p, *s;
-	const double *g;
-	int i, k, x, y;
-	double cx, h;
+	int i, j, k, x, y, top = 1;
+	double cy;
 	if ((query && *query) || !gtk_tree_view_get_visible_range(v, &a, &b)) return FALSE;
 	cairo_set_line_width(cr, 2);
-	for (; gtk_tree_path_compare(a, b) <= 0; gtk_tree_path_next(a)) {
+	for (; gtk_tree_path_compare(a, b) <= 0; gtk_tree_path_next(a), top = 0) {
 		gtk_tree_view_get_background_area(v, a, graph, &r);
 		gtk_tree_view_convert_bin_window_to_widget_coords(v, r.x, r.y, &x, &y);
 		gtk_tree_model_get_iter(filter, &it, a);
 		gtk_tree_model_get(filter, &it, 1, &i, -1);
-		for (p = row[i].graph, h = r.height, k = 0; p[k]; k++) {
-			cx = x + PAD + (cells - 1 - k) * W + W / 2;
-			if (p[k] == '*') {
-				if (joins(i ? row[i - 1].graph : 0, k, 0)) stroke(cr, k, cx, y, cx, y + h / 2);
-				if (joins(i + 1 < nrow ? row[i + 1].graph : 0, k, 1)) stroke(cr, k, cx, y + h / 2, cx, y + h);
-				if (row[i].note) {
-					cairo_set_source_rgb(cr, .88, .75, .25);
-					cairo_rectangle(cr, cx - 4, y + h / 2 - 4, 8, 8);
-				} else {
-					colour(cr, k);
-					cairo_arc(cr, cx, y + h / 2, 3.5, 0, 2 * G_PI);
-				}
-				cairo_fill(cr);
-			} else if ((s = strchr(shape, p[k]))) {
-				g = geom[s - shape];
-				stroke(cr, k + (p[k] != '|'), cx - g[0] * W, y + g[1] * h, cx - g[2] * W, y + g[3] * h);
-			}
+		x0 = x;
+		cy = y + r.height / 2.0;
+		for (j = i - 1; top && j >= 0 && !row[j].hash; j--);
+		if (top && j >= 0) span(cr, j, i, cy - r.height, r.height);
+		for (j = i + 1; j < nrow && !row[j].hash; j++);
+		if (j < nrow) span(cr, i, j, cy, r.height);
+		k = strchr(row[i].graph, '*') - row[i].graph;
+		if (row[i].note) {
+			cairo_set_source_rgb(cr, .88, .75, .25);
+			cairo_rectangle(cr, col(k) - 4, cy - 4, 8, 8);
+		} else {
+			colour(cr, k);
+			cairo_arc(cr, col(k), cy, 3.5, 0, 2 * G_PI);
 		}
+		cairo_fill(cr);
 	}
 	gtk_tree_path_free(a);
 	gtk_tree_path_free(b);
@@ -254,7 +274,8 @@ static void load(void)
 	for (i = 0; i < nrow; i++) {
 		k = strlen(row[i].graph);
 		if (k > cells) cells = k;
-		m = row[i].hash ? line(row + i) : g_strdup("");
+		if (!row[i].hash) continue;
+		m = line(row + i);
 		gtk_list_store_insert_with_values(store, 0, -1, 0, m, 1, i, -1);
 		g_free(m);
 	}
