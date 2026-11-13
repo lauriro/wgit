@@ -31,8 +31,10 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
 - `git.c`, `git.h`: the plumbing, with no GTK, so it is tested without a screen.
   It runs git (stdin in, stdout out; on failure the output is git's stderr),
   parses `git status --porcelain=v1 -z`,
-  gets a file's diff (`--no-index` against `/dev/null` for an untracked file),
+  gets a file's diff,
   or with `diffs()` the diff of a whole section (0 staged, 1 unstaged, 2 all untracked files),
+  where the untracked files go as intent-to-add into a temporary index (`GIT_INDEX_FILE` in a `mkdtemp` directory,
+  the paths C-quoted on stdin of `git add -N --pathspec-from-file=-`), so two git runs show any number of files,
   and builds hunk and line patches for `git apply --cached [-R] -`,
   or `git apply -R -` on the work tree to revert lines.
   `files()` stages, unstages or reverts several files in one git run;
@@ -145,7 +147,7 @@ an unknown command exits 2;
 A first argument `amend` sets `base`, and then `commit` amends.
 After it, `-U<n>` sets the diff context (`context`, 3 by default).
 
-The 42 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
+The 43 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
 
 1. stage hunk: the second hunk of a file with two hunks is staged.
 2. other hunk stays: the first hunk stays unstaged.
@@ -189,8 +191,9 @@ The 42 tests in `test.sh`, checked against the index with `git diff --cached` or
 40. untracked section: the untracked diff holds every untracked file.
 41. section stage new file: a hunk of the second untracked file is staged.
 42. unquoted path: the untracked diff names `ä.txt` as it is, not as `"b/\303\244.txt"`.
+43. odd names: untracked files with `"`, `\` and a newline in the name are all in the untracked diff.
 
-The summary line is `42 passed, 0 failed`.
+The summary line is `43 passed, 0 failed`.
 
 ## Checking the window
 
@@ -256,7 +259,7 @@ The window is still to be tried by the user on Wayland.
 ## The user's rules
 
 - The shortest general code that does the job, no frameworks.
-  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 55,904 bytes.
+  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 55,968 bytes.
 - No comments that say what the code does; a rare comment says why.
 - Tabs for indentation.
 - Every file except JSON starts with an empty line and ends with an empty line.

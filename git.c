@@ -132,25 +132,40 @@ Entry *status(int *n)
 
 char *diff(Entry *e, int cached)
 {
-	char *s, *u = !cached && e && e->y == '?' ? "--no-index" : 0, *p = e ? e->path : 0, c[16];
+	char *s, c[16];
+	if (e && !cached && e->y == '?') return diffs(2, e, 1);
 	snprintf(c, sizeof c, "-U%d", context);
 	git(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", c,
-		cached ? "--cached" : u ? u : "-p", cached && base ? base : "-p", "--", u ? "/dev/null" : p, p, 0});
+		cached ? "--cached" : "-p", cached && base ? base : "-p", "--", e ? e->path : 0, 0});
 	return s;
 }
 
+/* Untracked files go into a temporary index as intent-to-add, so one git diff shows them all as new files. */
 char *diffs(int sec, Entry *e, int n)
 {
-	char *s, *t;
+	char t[] = "/tmp/wgit-XXXXXX", x[24], *s, *p;
 	size_t len;
 	FILE *f;
 	if (sec < 2) return diff(0, !sec);
+	mkdtemp(t);
+	snprintf(x, sizeof x, "%s/i", t);
 	f = open_memstream(&s, &len);
 	for (; n--; e++) if (e->y == '?') {
-		fputs(t = diff(e, 0), f);
-		free(t);
+		fputc('"', f);
+		for (p = e->path; *p; p++) {
+			if (strchr("\"\\\n", *p)) fputc('\\', f);
+			fputc(*p == '\n' ? 'n' : *p, f);
+		}
+		fputs("\"\n", f);
 	}
 	fclose(f);
+	setenv("GIT_INDEX_FILE", x, 1);
+	git(0, s, (char *[]){"git", "add", "-N", "--pathspec-from-file=-", 0});
+	free(s);
+	s = diff(0, 0);
+	unsetenv("GIT_INDEX_FILE");
+	remove(x);
+	remove(t);
 	return s;
 }
 
