@@ -62,6 +62,9 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
 - `commit.c`: the commit view (`commit_view()`).
 - `log.c`: the log view (`log_view()`); it checks the signature of the selected commit only, as `%G?` for all rows is slow.
   The list holds commit rows only; connector lines such as `|/` get no row.
+  It loads 10,000 commits at a time: when `paint()` draws the last row of a full page, `more()` reruns
+  `history()` with a bigger limit and `fill()` adds only the new rows, so selection and scroll stay.
+  A filter search loads all commits first.
   The graph column is empty; after GTK draws the visible rows, `paint()` draws the graph with cairo,
   mirrored so the first column is next to the hash. `span()` maps the git text lines from one commit to the next
   onto the one row height between their centres, so connector lines share that space and lines join:

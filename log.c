@@ -6,7 +6,7 @@
 #include "git.h"
 #include "ui.h"
 
-enum { W = 7, PAD = 4 };
+enum { W = 7, PAD = 4, PAGE = 10000 };
 
 static GtkWidget *list, *dv, *sum;
 static GtkTreeViewColumn *graph;
@@ -15,7 +15,7 @@ static GtkTextBuffer *info;
 static Row *row;
 static char *text, *query;
 static GtkTreeModel *filter;
-static int nrow, cells;
+static int nrow, cells, ncom, limit, pending;
 static double x0;
 static const char sigs[] = "GUXYRBEN", *said[][2] = {
 	{"good", "✓ Good signature"},
@@ -74,6 +74,31 @@ static void stroke(cairo_t *cr, int k, double x1, double y1, double x2, double y
 	cairo_stroke(cr);
 }
 
+static void fill(int from)
+{
+	char *m;
+	int i, k;
+	for (i = from; i < nrow; i++) {
+		k = strlen(row[i].graph);
+		if (k > cells) cells = k;
+		if (!row[i].hash) continue;
+		m = line(row + i);
+		gtk_list_store_insert_with_values(store, 0, -1, 0, m, 1, i, -1);
+		g_free(m);
+		ncom++;
+	}
+	gtk_tree_view_column_set_fixed_width(graph, 2 * PAD + cells * W);
+}
+
+static gboolean more(gpointer all)
+{
+	int from = nrow;
+	row = history(&nrow, limit = all ? 1 << 30 : limit + PAGE);
+	fill(from);
+	pending = 0;
+	return FALSE;
+}
+
 static double col(int k)
 {
 	return x0 + PAD + (cells - 1 - k) * W + W / 2;
@@ -128,6 +153,8 @@ static gboolean paint(GtkTreeView *v, cairo_t *cr)
 		}
 		cairo_fill(cr);
 	}
+	if (!pending && ncom >= limit && *gtk_tree_path_get_indices(b) + 1 >= gtk_tree_model_iter_n_children(filter, 0))
+		pending = g_idle_add(more, 0);
 	gtk_tree_path_free(a);
 	gtk_tree_path_free(b);
 	return FALSE;
@@ -259,6 +286,7 @@ static void find(GtkEntry *e)
 {
 	g_free(query);
 	query = g_utf8_casefold(gtk_entry_get_text(e), -1);
+	if (*query && ncom >= limit) more(GINT_TO_POINTER(1));
 	gtk_tree_model_filter_refilter(GTK_TREE_MODEL_FILTER(filter));
 	gtk_tree_view_column_set_visible(graph, !*query);
 }
@@ -266,22 +294,12 @@ static void find(GtkEntry *e)
 static void load(void)
 {
 	GtkTreePath *p;
-	char *m;
-	int i, k;
 	gtk_tree_view_set_model(GTK_TREE_VIEW(list), 0);
 	gtk_list_store_clear(store);
-	cells = 0;
-	row = history(&nrow, 1 << 30);
-	for (i = 0; i < nrow; i++) {
-		k = strlen(row[i].graph);
-		if (k > cells) cells = k;
-		if (!row[i].hash) continue;
-		m = line(row + i);
-		gtk_list_store_insert_with_values(store, 0, -1, 0, m, 1, i, -1);
-		g_free(m);
-	}
+	cells = ncom = 0;
+	row = history(&nrow, limit = PAGE);
+	fill(0);
 	gtk_tree_view_set_model(GTK_TREE_VIEW(list), filter);
-	gtk_tree_view_column_set_fixed_width(graph, 2 * PAD + cells * W);
 	gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), p = gtk_tree_path_new_first(), 0, FALSE);
 	gtk_tree_path_free(p);
 }

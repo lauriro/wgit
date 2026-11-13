@@ -71,6 +71,7 @@ the graph of all branches at the left, the selected commit and its diff at the r
 ## Log view
 
 - The commits of all branches with their graph, as `git log --graph --all` draws it.
+  A long history loads 10,000 commits at a time; the next part loads when you scroll to the end.
 - The filter box over the list keeps only the commits whose hash, refs, subject or author contain the text,
   in any case. The graph is hidden while you filter.
 - Each row: hash, refs as coloured boxes, subject, author and date.
