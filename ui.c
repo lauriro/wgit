@@ -6,7 +6,8 @@
 #include "ui.h"
 
 GtkWidget *win;
-static GtkWidget *stack, *pane[4], *(*view[])(GtkWidget **) = {commit_view, log_view};
+static GtkWidget *stack, *page[2], *pane[4], *(*view[])(GtkWidget **) = {commit_view, log_view};
+static const char *title[] = {"Commit", "Log"};
 static int geo[] = {1000, 700, 300, 0, 450, 190};
 static char *conf;
 
@@ -70,22 +71,37 @@ static void theme(void)
 	g_dbus_connection_signal_subscribe(bus, name, iface, "SettingChanged", path, ns, 0, (GDBusSignalCallback)changed, 0, 0);
 }
 
-void flip(gpointer v)
+static void show(int v)
 {
-	int i = 2 * GPOINTER_TO_INT(v), k, built = !!pane[i];
-	GtkWidget *w = view[i / 2](pane + i);
-	if (!built) {
-		for (k = i; k < i + 2; k++) if (geo[k + 2]) gtk_paned_set_position(GTK_PANED(pane[k]), geo[k + 2]);
-		gtk_container_add(GTK_CONTAINER(stack), w);
-		gtk_widget_show_all(w);
-	}
-	gtk_stack_set_visible_child(GTK_STACK(stack), w);
+	int i = 2 * v, k, built = !!pane[i];
+	GtkWidget *w = view[v](pane + i);
+	if (built) return;
+	for (k = i; k < i + 2; k++) if (geo[k + 2]) gtk_paned_set_position(GTK_PANED(pane[k]), geo[k + 2]);
+	gtk_box_pack_start(GTK_BOX(page[v]), w, TRUE, TRUE, 0);
+	gtk_widget_show_all(w);
+}
+
+static void switched(GtkStack *s)
+{
+	show(gtk_stack_get_visible_child(s) == page[1]);
+}
+
+GtkWidget *tabs(GtkWidget *w)
+{
+	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0), *h = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), *s = gtk_stack_switcher_new();
+	gtk_stack_switcher_set_stack(GTK_STACK_SWITCHER(s), GTK_STACK(stack));
+	gtk_container_set_border_width(GTK_CONTAINER(h), 6);
+	gtk_box_pack_end(GTK_BOX(h), s, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(b), h, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(b), w, TRUE, TRUE, 0);
+	return b;
 }
 
 int app(const char *path, int v)
 {
 	FILE *f;
 	char *top = repo(path);
+	int k;
 	if (!top) return fputs("wgit: not a git repository\n", stderr), 1;
 	if (v < 0) status(&v), v = !v;
 	setenv("NO_AT_BRIDGE", "1", 0);
@@ -100,9 +116,15 @@ int app(const char *path, int v)
 	gtk_window_set_title(GTK_WINDOW(win), top);
 	gtk_window_set_default_size(GTK_WINDOW(win), geo[0], geo[1]);
 	gtk_container_add(GTK_CONTAINER(win), stack = gtk_stack_new());
+	for (k = 2; k--;) {
+		gtk_widget_show(page[k] = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
+		gtk_stack_add_titled(GTK_STACK(stack), page[k], title[k], title[k]);
+	}
+	gtk_stack_set_visible_child(GTK_STACK(stack), page[v]);
+	show(v);
+	g_signal_connect(stack, "notify::visible-child", G_CALLBACK(switched), 0);
 	g_signal_connect(win, "delete-event", G_CALLBACK(quit), 0);
 	g_signal_connect(win, "destroy", G_CALLBACK(gtk_main_quit), 0);
-	flip(GINT_TO_POINTER(v));
 	gtk_widget_show_all(win);
 	gtk_main();
 	return 0;

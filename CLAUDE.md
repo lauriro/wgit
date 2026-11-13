@@ -19,7 +19,7 @@ and implements only `org.freedesktop.portal.Settings` for `org.freedesktop.appea
 `ReadOne`, the older `Read` that wraps the value in one more variant (1 dark, 2 light),
 and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches.
 
-- wgit is one window with two views, commit and log; the Log and Commit buttons switch between them.
+- wgit is one window with two views, commit and log; a `[ Log | Commit ]` switcher at the top right switches them.
   `wgit` alone opens the commit view if `git status` lists anything, else the log view.
 - `wgit c` / `wgit commit [path]` opens the commit view, like gitg's commit view.
   `wgit l` / `wgit log [path]` opens the log view, gitk-like:
@@ -72,7 +72,8 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   `tag()` shows an annotated tag from `git for-each-ref` and `git verify-tag`, a lightweight tag changes nothing.
 - `ui.c`, `ui.h`: the window. `app()` checks the repo, starts GTK, follows the desktop colour scheme (`theme()`),
   restores the window size and both views' pane positions from `~/.local/state/wgit` (six numbers)
-  and shows a view in a `GtkStack`. `flip()` switches the view: it builds a view the first time and reloads it after.
+  and holds both views as pages of a `GtkStack`, with a `GtkStackSwitcher` in the bar that `tabs()` puts over each view's right side.
+  A page is empty until it is first shown; then `show()` builds the view into it, and later shows reload it.
   A view function builds its view when its pane array is empty and only reloads it otherwise.
 - `wgit.c`: the subcommand table and the prefix match.
 - `test.c`, `test.sh`: the test binary `wgit-test` and the script that drives it.
@@ -182,10 +183,10 @@ $W c > $O/log.txt 2>&1 &
 sleep 2
 shot() { import -window root $O/$1.png; }
 xdotool mousemove 60 103 click 1; sleep 1
-xdotool mousemove 400 201 click 1; sleep 1; shot 3
+xdotool mousemove 400 247 click 1; sleep 1; shot 3
 git diff --cached -U0 > $O/cached.txt
-xdotool mousemove 370 117 mousedown 1 mousemove 380 125 mousemove 385 134 mouseup 1; sleep 1
-xdotool mousemove 385 134 click 3; sleep 1; xdotool mousemove 455 176 click 1; sleep 1; shot 5
+xdotool mousemove 370 163 mousedown 1 mousemove 380 171 mousemove 385 180 mouseup 1; sleep 1
+xdotool mousemove 385 180 click 3; sleep 1; xdotool mousemove 455 222 click 1; sleep 1; shot 5
 xdotool mousemove 600 600 click 1 type 'Hello commit'; xdotool key ctrl+Return; sleep 1
 git log --stat -1 >> $O/cached.txt
 xdotool mousemove 360 676 click 1; sleep 1; shot 8
@@ -196,12 +197,12 @@ when `~/.local/state/wgit` (the size and pane positions saved on close) does not
 At that size the file pane is 341 px wide; Stage, Unstage, Revert and Ignore are at 41, 127, 215 and 297, y 22.
 List rows are 23 px apart starting at y 57,
 so with nothing staged the first unstaged row is at y 103.
-Diff lines are 17 px apart starting at y 14,
+Diff lines are 17 px apart starting at y 60, under the Log and Commit switcher at 811 and 933, y 22;
 the message handle is at y 527, Amend at 360,676, Cancel, Rescan and Commit at 776, 861 and 950, y 676.
 In the diff menu, Stage hunk is 17 px and Stage lines 42 px below the right click.
 To check the log view, run `$W l` in a clone of `../litejs` (mount it read-only and `git clone` it in the container):
 the filter box is at y 20, list rows are 23 px apart from y 57,
-Expand all, Collapse all and Commit are at 507, 611 and 950, y 676.
+Expand all and Collapse all are at 507 and 611, y 676.
 Read the PNGs with the Read tool to see them.
 To check the theme, add `dbus-daemon dbus-bin` to the image, run the script under `dbus-run-session --`,
 and start a small GDBus mock that owns `org.freedesktop.portal.Desktop` like tark-shell does,

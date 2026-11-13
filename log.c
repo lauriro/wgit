@@ -327,8 +327,6 @@ GtkWidget *log_view(GtkWidget **pane)
 		g_signal_connect_swapped(c, "clicked", G_CALLBACK(all), GINT_TO_POINTER(k));
 	}
 	gtk_box_pack_start(GTK_BOX(b), sum = gtk_label_new(0), FALSE, FALSE, 6);
-	gtk_box_pack_end(GTK_BOX(b), c = gtk_button_new_with_label("Commit"), FALSE, FALSE, 0);
-	g_signal_connect_swapped(c, "clicked", G_CALLBACK(flip), GINT_TO_POINTER(0));
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
 	pane[0] = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
 	pane[1] = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
@@ -345,7 +343,7 @@ GtkWidget *log_view(GtkWidget **pane)
 	g_signal_connect(c, "search-changed", G_CALLBACK(find), 0);
 	gtk_box_pack_start(GTK_BOX(b), scroll(list), TRUE, TRUE, 0);
 	gtk_paned_pack1(GTK_PANED(pane[0]), b, FALSE, FALSE);
-	gtk_paned_pack2(GTK_PANED(pane[0]), pane[1], TRUE, TRUE);
+	gtk_paned_pack2(GTK_PANED(pane[0]), tabs(pane[1]), TRUE, TRUE);
 	load();
 	return pane[0];
 }

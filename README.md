@@ -15,13 +15,13 @@ $ make
 $ ./wgit
 ```
 
-wgit is one window with two views, and the Log and Commit buttons switch between them.
+wgit is one window with two views, and the `[ Log | Commit ]` switcher at the top right switches between them.
 `wgit` alone opens the commit view when the repo has changes, else the log view.
 
 `wgit commit` (or `wgit c`, any unique prefix) opens the commit view, like gitg's:
 staged, unstaged and untracked files in one list on the left,
 the selected file's diff on the right,
-a message box and Log, Cancel, Rescan and Commit buttons below.
+a message box and Cancel, Rescan and Commit buttons below.
 `wgit log` (or `wgit l`) opens the log view, like gitk:
 the graph of all branches at the left, the selected commit and its diff at the right.
 `wgit c <path>` and `wgit l <path>` work in the repo of that path.

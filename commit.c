@@ -310,8 +310,8 @@ static gboolean key(GtkWidget *w, GdkEventKey *ev)
 
 GtkWidget *commit_view(GtkWidget **pane)
 {
-	static const char *end[] = {"Commit", "Rescan", "Cancel", "Log"};
-	GCallback fn[] = {G_CALLBACK(submit), G_CALLBACK(reload), G_CALLBACK(gtk_window_close), G_CALLBACK(flip)};
+	static const char *end[] = {"Commit", "Rescan", "Cancel"};
+	GCallback fn[] = {G_CALLBACK(submit), G_CALLBACK(reload), G_CALLBACK(gtk_window_close)};
 	GtkWidget *l, *r, *b, *m, *c;
 	GtkTreeSelection *s;
 	int k;
@@ -353,13 +353,13 @@ GtkWidget *commit_view(GtkWidget **pane)
 	msg = gtk_text_view_get_buffer(GTK_TEXT_VIEW(m));
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), amend = gtk_check_button_new_with_label("Amend"), FALSE, FALSE, 0);
-	for (k = 0; k < 4; k++) {
+	for (k = 0; k < 3; k++) {
 		gtk_box_pack_end(GTK_BOX(b), c = gtk_button_new_with_label(end[k]), FALSE, FALSE, 0);
-		g_signal_connect_swapped(c, "clicked", fn[k], k < 3 ? win : GINT_TO_POINTER(1));
+		g_signal_connect_swapped(c, "clicked", fn[k], win);
 	}
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
 	gtk_paned_pack1(GTK_PANED(pane[0]), l, FALSE, FALSE);
-	gtk_paned_pack2(GTK_PANED(pane[0]), pane[1], TRUE, TRUE);
+	gtk_paned_pack2(GTK_PANED(pane[0]), tabs(pane[1]), TRUE, TRUE);
 	g_signal_connect(amend, "toggled", G_CALLBACK(last), 0);
 	g_signal_connect(win, "key-press-event", G_CALLBACK(key), 0);
 	reload();
