@@ -282,14 +282,15 @@ int commit(char **out, const char *msg, int amend)
 	return git(out, msg, (char *[]){"git", "commit", "-q", "-F", "-", amend ? "--amend" : 0, 0});
 }
 
-Row *history(int *n)
+Row *history(int *n, int max)
 {
 	static char *s;
 	static Row *r;
-	char *p, *e, **f, *t, **h = 0;
+	char *p, *e, **f, *t, **h = 0, lim[16];
 	int i, m = 0;
 	free(s);
-	if (git(&s, 0, (char *[]){"git", "log", "--graph", "--exclude=refs/notes/*", "--all", "--decorate=full",
+	snprintf(lim, sizeof lim, "-n%d", max);
+	if (git(&s, 0, (char *[]){"git", "log", "--graph", "--exclude=refs/notes/*", "--all", "--decorate=full", lim,
 		"--format=%x1f%h%x1f%H%x1f%D%x1f%aN%x1f%ai%x1f%s", 0})) *s = 0;
 	for (*n = 0, p = s; *p; p = e, (*n)++) {
 		e = p + strcspn(p, "\n");

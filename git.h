@@ -22,6 +22,6 @@ int files(char **out, int op, Entry **e, int n);
 char *patterns(Entry **e, int n);
 int ignore(char **out, char *add, int sort);
 int commit(char **out, const char *msg, int amend);
-Row *history(int *n);
+Row *history(int *n, int max);
 int joins(const char *g, int k, int down);
 

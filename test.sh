@@ -166,6 +166,7 @@ git checkout -q -b dev && git commit -q --allow-empty -m dev1
 git checkout -q main && GIT_COMMITTER_DATE=2030-01-01T00:00:00 git commit -q --allow-empty -m four
 check 'log joins' "$(printf '%s\n' 'four -d' 'dev1 -d' 'merge ud' 'two ud' 'three ud' 'one u-')" "$("$T" joins)"
 check 'log notes' three "$("$T" notes)"
+check 'log limit' "$(printf '%s\t%s\t%s\n' '* ' 'HEAD -> refs/heads/main' four '| * ' refs/heads/dev dev1 '|/  ' '' '')" "$("$T" log 2)"
 
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

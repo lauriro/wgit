@@ -271,7 +271,7 @@ static void load(void)
 	gtk_tree_view_set_model(GTK_TREE_VIEW(list), 0);
 	gtk_list_store_clear(store);
 	cells = 0;
-	row = history(&nrow);
+	row = history(&nrow, 1 << 30);
 	for (i = 0; i < nrow; i++) {
 		k = strlen(row[i].graph);
 		if (k > cells) cells = k;

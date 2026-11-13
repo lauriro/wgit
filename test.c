@@ -10,18 +10,18 @@ int main(int argc, char **argv)
 	int i, j, n, k = 0, r = 0;
 	char *o = 0;
 	Entry *e, **f = calloc(argc, sizeof *f);
-	if (argc == 2 && !strcmp(argv[1], "log")) {
-		Row *w = history(&n);
+	if (argc > 1 && argc < 4 && !strcmp(argv[1], "log")) {
+		Row *w = history(&n, argc > 2 ? atoi(argv[2]) : 1 << 30);
 		for (i = 0; i < n; i++) printf("%s\t%s\t%s\n", w[i].graph, w[i].hash ? w[i].refs : "", w[i].hash ? w[i].subject : "");
 		return 0;
 	}
 	if (argc == 2 && !strcmp(argv[1], "notes")) {
-		Row *w = history(&n);
+		Row *w = history(&n, 1 << 30);
 		for (i = 0; i < n; i++) if (w[i].note) puts(w[i].subject);
 		return 0;
 	}
 	if (argc == 2 && !strcmp(argv[1], "joins")) {
-		Row *w = history(&n);
+		Row *w = history(&n, 1 << 30);
 		for (i = 0; i < n; i++) if (w[i].hash) {
 			k = strchr(w[i].graph, '*') - w[i].graph;
 			printf("%s %c%c\n", w[i].subject, joins(i ? w[i - 1].graph : 0, k, 0) ? 'u' : '-', joins(i + 1 < n ? w[i + 1].graph : 0, k, 1) ? 'd' : '-');
