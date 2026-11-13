@@ -54,6 +54,7 @@ Why some things are as they are:
   It reloads on a switch to the log view only when the refs changed (`stale()`, needs git 2.45).
 - The graph column is empty; `paint()` draws the graph with cairo after GTK draws the rows,
   mirrored so the first column is next to the hash.
+  The column is at least four cells wide, the width of two branches, so a new branch does not move the rows.
 
 ## Build and test
 

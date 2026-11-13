@@ -106,7 +106,8 @@ static void load(void)
 	GtkTreePath *p;
 	gtk_tree_view_set_model(GTK_TREE_VIEW(list), 0);
 	gtk_list_store_clear(store);
-	cells = ncom = 0;
+	ncom = 0;
+	cells = 4;
 	row = history(&nrow, limit = PAGE);
 	fill(0);
 	gtk_tree_view_set_model(GTK_TREE_VIEW(list), filter);
