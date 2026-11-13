@@ -41,6 +41,9 @@ int git(char **out, const char *in, char **argv)
 		close(i[1]);
 		close(o[0]);
 		setenv("GIT_LITERAL_PATHSPECS", "1", 1);
+		setenv("GIT_CONFIG_COUNT", "1", 1);
+		setenv("GIT_CONFIG_KEY_0", "core.quotePath", 1);
+		setenv("GIT_CONFIG_VALUE_0", "false", 1);
 		execvp(*argv, argv);
 		_exit(127);
 	}

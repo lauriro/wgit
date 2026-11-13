@@ -49,6 +49,7 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   `joins()` says if a `*` at column k joins the row above or below: a `|` or `*` at k,
   or a slash from the next column that ends or starts at k.
   `GIT_LITERAL_PATHSPECS=1` is set for every git run, so names with `:` or `*` are plain paths.
+  `core.quotePath=false` is set the same way through `GIT_CONFIG_COUNT`, so a diff names a file as `git status -z` does.
 - `diff-view.c`, `diff-view.h`: the coloured diff view, shared by commit and log.
   Each view keeps its callbacks on its own widget, so one window can hold several;
   `diff_show()` and `diff_lines()` take the view.
@@ -129,7 +130,7 @@ an unknown command exits 2;
 A first argument `amend` sets `base`, and then `commit` amends.
 After it, `-U<n>` sets the diff context (`context`, 3 by default).
 
-The 41 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
+The 42 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
 
 1. stage hunk: the second hunk of a file with two hunks is staged.
 2. other hunk stays: the first hunk stays unstaged.
@@ -172,8 +173,9 @@ The 41 tests in `test.sh`, checked against the index with `git diff --cached` or
 39. section unstage hunk: it is unstaged through the staged section diff.
 40. untracked section: the untracked diff holds every untracked file.
 41. section stage new file: a hunk of the second untracked file is staged.
+42. unquoted path: the untracked diff names `ä.txt` as it is, not as `"b/\303\244.txt"`.
 
-The summary line is `41 passed, 0 failed`.
+The summary line is `42 passed, 0 failed`.
 
 ## Checking the window
 

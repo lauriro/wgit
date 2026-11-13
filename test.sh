@@ -189,6 +189,8 @@ check 'section unstage hunk' '' "$(changes --cached)"
 check 'untracked section' "$(printf '+++ b/u.txt\n+++ b/v.txt')" "$("$T" diffs 2 | grep '^+++')"
 "$T" stage :2 "$("$T" diffs 2 | nth 2)"
 check 'section stage new file' '+other' "$(changes --cached)"
+echo x > 'ä.txt'
+check 'unquoted path' '+++ b/ä.txt' "$("$T" diffs 2 | grep '^+++' | tail -1)"
 
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
