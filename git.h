@@ -1,6 +1,6 @@
 
 typedef struct {
-	char x, y, *path, *orig;
+	char *path, *orig, x, y;
 } Entry;
 
 typedef struct {

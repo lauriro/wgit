@@ -55,7 +55,7 @@ int git(char **out, const char *in, char **argv)
 	close(o[0]);
 	waitpid(pid, &st, 0);
 	if (st) {
-		lseek(fileno(e), 0, SEEK_SET);
+		rewind(e);
 		t = slurp(fileno(e));
 		if (*t) {
 			free(s);
@@ -82,9 +82,9 @@ char *parent(void)
 	return s;
 }
 
-static int cmp(const void *a, const void *b)
+static int by(const void *a, const void *b)
 {
-	return strcmp(((const Entry *)a)->path, ((const Entry *)b)->path);
+	return strcmp(*(char **)a, *(char **)b);
 }
 
 Entry *status(int *n)
@@ -99,7 +99,7 @@ Entry *status(int *n)
 	if (git(&s, 0, (char *[]){"git", "status", "--porcelain=v1", "-z", "-uall", 0})) *s = 0;
 	for (*n = 0, p = s; *p; (*n)++) {
 		e = realloc(e, (*n + 1) * sizeof *e);
-		e[*n] = (Entry){p[0], p[1], p + 3, 0};
+		e[*n] = (Entry){p + 3, 0, p[0], p[1]};
 		p += strlen(p) + 1;
 		if (*e[*n].path && strchr("RC", e[*n].x)) {
 			e[*n].orig = p;
@@ -125,30 +125,26 @@ Entry *status(int *n)
 			e[i].x = *p;
 			e[i].orig = o;
 		}
-		qsort(e, *n, sizeof *e, cmp);
+		qsort(e, *n, sizeof *e, by);
 	}
 	return e;
 }
 
 char *diff(Entry *e, int cached)
 {
-	char *s, *u = !cached && e->y == '?' ? "--no-index" : 0, c[16];
+	char *s, *u = !cached && e && e->y == '?' ? "--no-index" : 0, *p = e ? e->path : 0, c[16];
 	snprintf(c, sizeof c, "-U%d", context);
 	git(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", c,
-		cached ? "--cached" : u ? u : "-p", cached && base ? base : "-p", "--", u ? "/dev/null" : e->path, e->path, 0});
+		cached ? "--cached" : u ? u : "-p", cached && base ? base : "-p", "--", u ? "/dev/null" : p, p, 0});
 	return s;
 }
 
 char *diffs(int sec, Entry *e, int n)
 {
-	char *s, *t, c[16];
+	char *s, *t;
 	size_t len;
 	FILE *f;
-	snprintf(c, sizeof c, "-U%d", context);
-	if (sec < 2) {
-		git(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", c, sec ? "-p" : "--cached", !sec && base ? base : "-p", 0});
-		return s;
-	}
+	if (sec < 2) return diff(0, !sec);
 	f = open_memstream(&s, &len);
 	for (; n--; e++) if (e->y == '?') {
 		fputs(t = diff(e, 0), f);
@@ -162,23 +158,15 @@ char *patch(const char *d, int from, int to, int rev)
 {
 	char *r, *b, *q = 0;
 	size_t n, m;
-	int l = 0, h = -1, a = 0, c = 0, ob = 0, nb = 0, any = 0, chg = 0, drop = 0, bs = 0, be = -1, ch;
+	int l = 0, h = -1, a = 0, c = 0, ob = 0, nb = 0, any = 0, chg = 0, drop = 0, top, ch;
 	const char *p = d, *e;
 	FILE *f = open_memstream(&r, &n), *g = 0;
-	for (; *p; p = e, l++) {
+	for (;; p = e, l++) {
 		e = p + strcspn(p, "\n");
 		e += !!*e;
-		if (!strncmp(p, "diff --git ", 11)) {
-			if (l <= from) bs = l;
-			else if (be < 0) be = l;
-		}
-	}
-	for (p = d, l = 0;; p = e, l++) {
-		e = p + strcspn(p, "\n");
-		e += !!*e;
-		if (l < bs) continue;
-		if (l == be) e = p = "";
-		if (g && (!*p || !strncmp(p, "@@", 2))) {
+		top = !strncmp(p, "diff --git ", 11);
+		if (top && l > from) e = p = "";
+		if (g && (top || !*p || !strncmp(p, "@@", 2))) {
 			fclose(g);
 			g = 0;
 			if (chg) {
@@ -190,6 +178,7 @@ char *patch(const char *d, int from, int to, int rev)
 			free(b);
 		}
 		if (!*p) break;
+		if (top) rewind(f), h = -1;
 		ch = *p;
 		if (!strncmp(p, "@@", 2)) {
 			h = l;
@@ -280,15 +269,10 @@ static int split(char ***l, int n, char *p)
 	return n;
 }
 
-static int by(const void *a, const void *b)
-{
-	return strcmp(*(char **)a, *(char **)b);
-}
-
 int ignore(char **out, char *add, int sort)
 {
 	int fd = open(".gitignore", O_RDONLY), i, j, k, m, n;
-	char *s = fd < 0 ? calloc(1, 1) : slurp(fd), **l = 0;
+	char *s = fd < 0 ? strdup("") : slurp(fd), **l = 0;
 	FILE *f;
 	if (fd >= 0) close(fd);
 	for (k = n = split(&l, 0, s); k && !*l[k - 1]; k--);
@@ -318,28 +302,23 @@ Row *history(int *n, int max)
 {
 	static char *s;
 	static Row *r;
-	char *p, *e, **f, *t, **h = 0, lim[16];
-	int i, m = 0;
+	char *p, **f, *t, **l = 0, lim[16];
+	int i, m;
 	free(s);
 	snprintf(lim, sizeof lim, "-n%d", max);
 	if (git(&s, 0, (char *[]){"git", "log", "--graph", "--exclude=refs/notes/*", "--all", "--decorate=full", lim,
 		"--format=%x1f%h%x1f%H%x1f%D%x1f%aN%x1f%ai%x1f%s", 0})) *s = 0;
-	for (*n = 0, p = s; *p; p = e, (*n)++) {
-		e = p + strcspn(p, "\n");
-		if (*e) *e++ = 0;
-		r = realloc(r, (*n + 1) * sizeof *r);
-		r[*n] = (Row){p};
-		for (f = &r[*n].graph; f < &r[*n].subject && (p = strchr(p, 037)); *++f = ++p) *p = 0;
+	*n = split(&l, 0, s);
+	r = realloc(r, (*n + 1) * sizeof *r);
+	for (i = 0; i < *n; i++) {
+		r[i] = (Row){p = l[i]};
+		for (f = &r[i].graph; f < &r[i].subject && (p = strchr(p, 037)); *++f = ++p) *p = 0;
 	}
-	if (!git(&t, 0, (char *[]){"git", "notes", "list", 0})) for (p = t; *p; p = e) {
-		e = p + strcspn(p, "\n");
-		if (*e) *e++ = 0;
-		h = realloc(h, (m + 1) * sizeof *h);
-		h[m++] = p + strcspn(p, " ") + 1;
-	}
-	if (m) qsort(h, m, sizeof *h, by);
-	for (i = 0; m && i < *n; i++) r[i].note = r[i].full && bsearch(&r[i].full, h, m, sizeof *h, by);
-	free(h);
+	m = git(&t, 0, (char *[]){"git", "notes", "list", 0}) ? 0 : split(&l, 0, t);
+	for (i = 0; i < m; i++) l[i] += strcspn(l[i], " ") + 1;
+	qsort(l, m, sizeof *l, by);
+	for (i = 0; m && i < *n; i++) r[i].note = r[i].full && bsearch(&r[i].full, l, m, sizeof *l, by);
+	free(l);
 	free(t);
 	return r;
 }
