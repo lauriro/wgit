@@ -112,10 +112,10 @@ static gboolean stick(GtkTextView *v, cairo_t *cr)
 	gtk_text_view_get_visible_rect(v, &r);
 	gtk_text_view_buffer_to_window_coords(v, GTK_TEXT_WINDOW_WIDGET, r.x, top, &x, &y);
 	gtk_render_background(c, cr, x, y, r.width, h);
+	gtk_text_view_buffer_to_window_coords(v, GTK_TEXT_WINDOW_WIDGET, r.x + gtk_text_view_get_left_margin(v), top, &x, &y);
 	cairo_set_source_rgba(cr, .5, .5, .5, .2);
-	cairo_rectangle(cr, x, y, r.width, h);
+	cairo_rectangle(cr, x, y, r.width - gtk_text_view_get_left_margin(v) - gtk_text_view_get_right_margin(v), h);
 	cairo_fill(cr);
-	gtk_text_view_buffer_to_window_coords(v, GTK_TEXT_WINDOW_WIDGET, 0, top, &x, &y);
 	if ((pb = gtk_text_iter_get_pixbuf(&it))) {
 		gdk_cairo_set_source_pixbuf(cr, pb, x, y + (h - gdk_pixbuf_get_height(pb)) / 2);
 		cairo_paint(cr);
@@ -194,9 +194,9 @@ GtkWidget *diff_view(Hunk *hunk, Menu *menu)
 	g_signal_connect_after(v, "draw", G_CALLBACK(stick), 0);
 	if (menu) g_signal_connect(v, "populate-popup", G_CALLBACK(popup), menu);
 	gtk_container_add(GTK_CONTAINER(s), v);
-	gtk_widget_set_margin_start(s, 6);
-	gtk_widget_set_margin_end(s, 6);
-	gtk_widget_set_margin_bottom(s, 6);
+	gtk_text_view_set_left_margin(GTK_TEXT_VIEW(v), 6);
+	gtk_text_view_set_right_margin(GTK_TEXT_VIEW(v), 6);
+	gtk_text_view_set_bottom_margin(GTK_TEXT_VIEW(v), 6);
 	return s;
 }
 
