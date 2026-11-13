@@ -31,20 +31,21 @@ int main(int argc, char **argv)
 	if (argc > 1 && !strcmp(argv[1], "amend")) base = parent(), argv++, argc--;
 	if (argc > 1 && !strncmp(argv[1], "-U", 2)) context = atoi(argv[1] + 2), argv++, argc--;
 	e = status(&n);
+	if (argc == 3 && !strcmp(argv[1], "diffs")) return fputs(diffs(atoi(argv[2]), e, n), stdout), 0;
 	for (i = 0; argc < 3 && i < n; i++) printf("%c%c %s%s%s\n", e[i].x, e[i].y, e[i].path, e[i].orig ? " < " : "", e[i].orig ? e[i].orig : "");
 	if (argc < 3) return 0;
 	if (*argv[1] == 'c') r = commit(&o, argv[2], !!base);
 	else {
 		while (k < 8 && strcmp(argv[1], op[k])) k++;
 		if (k > 7) return 2;
-		for (j = 2; j < (k < 5 ? argc : 3); j++) {
+		for (j = 2; j < (k < 5 ? argc : *argv[2] == ':' ? 2 : 3); j++) {
 			for (i = 0; i < n && strcmp(e[i].path, argv[j]); i++);
 			if (i == n) return 2;
 			f[j - 2] = e + i;
 		}
 		r = k < 3 ? files(&o, k, f, argc - 2)
 			: k < 5 ? ignore(&o, patterns(f, argc - 2), k > 3)
-			: apply(&o, diff(*f, k == 6), atoi(argv[3]), argc > 4 ? atoi(argv[4]) : -1, k - 5);
+			: apply(&o, *argv[2] == ':' ? diffs(argv[2][1] - '0', e, n) : diff(*f, k == 6), atoi(argv[3]), argc > 4 ? atoi(argv[4]) : -1, k - 5);
 	}
 	if (o) fputs(o, stderr);
 	return !!r;

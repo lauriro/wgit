@@ -32,6 +32,7 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   It runs git (stdin in, stdout out; on failure the output is git's stderr),
   parses `git status --porcelain=v1 -z`,
   gets a file's diff (`--no-index` against `/dev/null` for an untracked file),
+  or with `diffs()` the diff of a whole section (0 staged, 1 unstaged, 2 all untracked files),
   and builds hunk and line patches for `git apply --cached [-R] -`,
   or `git apply -R -` on the work tree to revert lines.
   `files()` stages, unstages or reverts several files in one git run;
@@ -84,7 +85,7 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
 - `test.c`, `test.sh`: the test binary `wgit-test` and the script that drives it.
 - `Containerfile`: the local build image `wgit-build`.
 
-How a line patch is made (`patch()` in `git.c`):
+How a line patch is made (`patch()` in `git.c`; in a diff of many files it uses only the block of the file that holds line FROM):
 lines in the chosen range are kept;
 an unchosen `+` line is dropped and an unchosen `-` line becomes context when staging;
 for unstaging (`rev`, applied with `-R` to a `--cached` diff) the two rules swap.
@@ -115,6 +116,7 @@ podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build sh -c 'make && make test'
 `add|reset|revert FILE...` stages, unstages or reverts whole files;
 `ignore|ignore-sorted FILE...` adds the files' patterns to `.gitignore`;
 `stage|unstage|discard FILE FROM [TO]` stages, unstages or reverts diff lines FROM..TO (0-based), or the hunk whose header is FROM;
+FILE `:N` uses the diff of section N instead; `diffs N` prints that diff;
 an unknown command exits 2;
 `commit MSG` commits;
 `log [N]` prints the graph, the refs and the subject, tab-separated, of the first N commits (all without N).
@@ -123,7 +125,7 @@ an unknown command exits 2;
 A first argument `amend` sets `base`, and then `commit` amends.
 After it, `-U<n>` sets the diff context (`context`, 3 by default).
 
-The 37 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
+The 41 tests in `test.sh`, checked against the index with `git diff --cached` or against the status:
 
 1. stage hunk: the second hunk of a file with two hunks is staged.
 2. other hunk stays: the first hunk stays unstaged.
@@ -162,8 +164,12 @@ The 37 tests in `test.sh`, checked against the index with `git diff --cached` or
 35. log joins: a dot joins a `|` above and below, the `\` it starts from and the `/` it goes into.
 36. log notes: the commit with a git note is marked.
 37. log limit: `-n 2` gives the first two commits and the connector line after them, as a full run starts.
+38. section stage hunk: a hunk of the second file of an unstaged section diff is staged in that file.
+39. section unstage hunk: it is unstaged through the staged section diff.
+40. untracked section: the untracked diff holds every untracked file.
+41. section stage new file: a hunk of the second untracked file is staged.
 
-The summary line is `37 passed, 0 failed`.
+The summary line is `41 passed, 0 failed`.
 
 ## Checking the window
 

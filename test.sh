@@ -168,6 +168,28 @@ check 'log joins' "$(printf '%s\n' 'four -d' 'dev1 -d' 'merge ud' 'two ud' 'thre
 check 'log notes' three "$("$T" notes)"
 check 'log limit' "$(printf '%s\t%s\t%s\n' '* ' 'HEAD -> refs/heads/main' four '| * ' refs/heads/dev dev1 '|/  ' '' '')" "$("$T" log 2)"
 
+# ---- Section diffs ----
+
+nth() {
+	sed -n '/^@@/=' | sed -n "$1p" | awk '{print $1 - 1}'
+}
+
+seq 20 > p.txt
+seq 101 120 > q.txt
+git add p.txt q.txt
+git commit -qm files
+sed -i 's/^2$/two/' p.txt
+sed -i 's/^103$/three/; s/^118$/eighteen/' q.txt
+echo new > u.txt
+echo other > v.txt
+"$T" stage :1 "$(git diff | nth 3)"
+check 'section stage hunk' "$(printf -- 'q.txt\n-118\n+eighteen')" "$(git diff --cached --name-only; changes --cached)"
+"$T" unstage :0 "$(git diff --cached | nth 1)"
+check 'section unstage hunk' '' "$(changes --cached)"
+check 'untracked section' "$(printf '+++ b/u.txt\n+++ b/v.txt')" "$("$T" diffs 2 | grep '^+++')"
+"$T" stage :2 "$("$T" diffs 2 | nth 2)"
+check 'section stage new file' '+other' "$(changes --cached)"
+
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
 

@@ -136,16 +136,45 @@ char *diff(Entry *e, int cached)
 	return s;
 }
 
+char *diffs(int sec, Entry *e, int n)
+{
+	char *s, *t, c[16];
+	size_t len;
+	FILE *f;
+	snprintf(c, sizeof c, "-U%d", context);
+	if (sec < 2) {
+		git(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", c, sec ? "-p" : "--cached", !sec && base ? base : "-p", 0});
+		return s;
+	}
+	f = open_memstream(&s, &len);
+	for (; n--; e++) if (e->y == '?') {
+		fputs(t = diff(e, 0), f);
+		free(t);
+	}
+	fclose(f);
+	return s;
+}
+
 char *patch(const char *d, int from, int to, int rev)
 {
 	char *r, *b, *q = 0;
 	size_t n, m;
-	int l = 0, h = -1, a = 0, c = 0, ob = 0, nb = 0, any = 0, chg = 0, drop = 0, ch;
+	int l = 0, h = -1, a = 0, c = 0, ob = 0, nb = 0, any = 0, chg = 0, drop = 0, bs = 0, be = -1, ch;
 	const char *p = d, *e;
 	FILE *f = open_memstream(&r, &n), *g = 0;
-	for (;; p = e, l++) {
+	for (; *p; p = e, l++) {
 		e = p + strcspn(p, "\n");
 		e += !!*e;
+		if (!strncmp(p, "diff --git ", 11)) {
+			if (l <= from) bs = l;
+			else if (be < 0) be = l;
+		}
+	}
+	for (p = d, l = 0;; p = e, l++) {
+		e = p + strcspn(p, "\n");
+		e += !!*e;
+		if (l < bs) continue;
+		if (l == be) e = p = "";
 		if (g && (!*p || !strncmp(p, "@@", 2))) {
 			fclose(g);
 			g = 0;
