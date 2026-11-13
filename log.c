@@ -13,7 +13,7 @@ static GtkTreeViewColumn *graph;
 static GtkListStore *store;
 static GtkTextBuffer *info;
 static Row *row;
-static char *text, *query, *seen;
+static char *query, *seen;
 static GtkTreeModel *filter;
 static int nrow, cells, ncom, limit, pending;
 static double x0;
@@ -92,15 +92,11 @@ static void fill(int from)
 
 static int stale(void)
 {
-	char *a, *b, *t;
+	char *t;
 	int r;
-	git(&a, 0, (char *[]){"git", "for-each-ref", "--format=%(HEAD)%(objectname)%(refname)", 0});
-	git(&b, 0, (char *[]){"git", "rev-parse", "HEAD", 0});
-	t = g_strconcat(a, b, NULL);
+	git(&t, 0, (char *[]){"git", "for-each-ref", "--include-root-refs", "--format=%(HEAD)%(objectname)%(refname)", 0});
 	r = !seen || strcmp(seen, t);
-	free(a);
-	free(b);
-	g_free(seen);
+	free(seen);
 	seen = t;
 	return r;
 }
@@ -200,40 +196,42 @@ static void put(const char *s, int len, const char *tag)
 	g_free(t);
 }
 
-static void field(const char *label, const char *value, const char *tag)
+static void cut(char *p, char **f, int n)
 {
-	put(label, -1, "dim");
-	put(value, -1, tag);
+	for (; n--; p += strlen(p) + 1) *f++ = p;
 }
 
-static void sign(int k, const char *who, const char *msg)
+static void details(int t, char **f, int sig)
 {
-	int l = strcspn(msg, "\n");
-	put("\nSigned  ", -1, "dim");
-	put(said[k][1], -1, said[k][0]);
-	if (*who) put(" from ", -1, 0), put(who, -1, 0);
-	put("\n\n", -1, 0);
-	put(msg, l, "bold");
-	put(msg + l, -1, 0);
-}
-
-static int tag(const char *name)
-{
-	char *o, *v, *f[5], *p, *ref = g_strconcat("refs/tags/", name, NULL);
-	int k, r = git(&o, 0, (char *[]){"git", "for-each-ref", "--format=%(objecttype)%00%(*objectname)%00%(taggername) %(taggeremail)%00%(taggerdate:iso)%00%(contents:subject)%0a%(contents:body)", ref, 0});
-	g_free(ref);
-	if (r || strcmp(o, "tag")) return free(o), 0;
-	for (p = o, k = 0; k < 5; k++, p += strlen(p) + 1) f[k] = p;
-	r = git(&v, 0, (char *[]){"git", "verify-tag", (char *)name, 0});
+	static const char *label[][4] = {{"Commit  ", "\nParent  ", "\nAuthor  ", "  "}, {"Tag     ", " → ", "\nTagger  ", "  "}};
+	static const char *mark[] = {"hash", "hash", 0, "dim", "bold"};
+	int k, l;
 	gtk_text_buffer_set_text(info, "", 0);
-	field("Tag     ", name, "bold");
-	field(" → ", f[1], "hash");
-	field("\nTagger  ", f[2], 0);
-	field("  ", f[3], "dim");
-	sign(!r ? 0 : strstr(v, "no signature") ? 7 : 6, "", f[4]);
+	for (k = 0; k < 4; k++) {
+		put(label[t][k], -1, "dim");
+		put(f[k], -1, mark[t && !k ? 4 : k]);
+	}
+	put("\nSigned  ", -1, "dim");
+	put(said[sig][1], -1, said[sig][0]);
+	if (*f[5]) put(" from ", -1, 0), put(f[5], -1, 0);
+	put("\n\n", -1, 0);
+	put(f[6], l = strcspn(f[6], "\n"), "bold");
+	put(f[6] + l, -1, 0);
+}
+
+static void tag(char *name)
+{
+	char *o, *v, *f[7], *ref = g_strdup_printf("refs/tags/%s", name);
+	int r = git(&o, 0, (char *[]){"git", "for-each-ref", "--format=%(objecttype)%00%(*objectname)%00%(taggername) %(taggeremail)%00%(taggerdate:iso)%00%00%00%(contents:subject)%0a%(contents:body)", ref, 0});
+	g_free(ref);
+	if (!r && !strcmp(o, "tag")) {
+		cut(o, f, 7);
+		f[0] = name;
+		r = git(&v, 0, (char *[]){"git", "verify-tag", name, 0});
+		details(1, f, !r ? 0 : strstr(v, "no signature") ? 7 : 6);
+		free(v);
+	}
 	free(o);
-	free(v);
-	return 1;
 }
 
 static gboolean chip(GtkTreeView *v, GdkEventButton *ev)
@@ -270,27 +268,20 @@ static void pick(GtkTreeSelection *s)
 {
 	GtkTreeModel *m;
 	GtkTreeIter it;
-	char *o, *f[8], *p;
-	int i, k;
+	const char *p;
+	char *o, *f[9];
+	int i;
 	if (!gtk_tree_selection_get_selected(s, &m, &it)) return;
 	gtk_tree_model_get(m, &it, 1, &i, -1);
-	if (!row[i].hash) return;
-	if (!git(&o, 0, (char *[]){"git", "show", "-s", "--format=%H%x00%P%x00%an <%ae>%x00%ai%x00%G?%x00%GS%x00%B%x00%N", row[i].hash, 0})) {
-		for (p = o, k = 0; k < 8; k++, p += strlen(p) + 1) f[k] = p;
-		gtk_text_buffer_set_text(info, "", 0);
-		field("Commit  ", f[0], "hash");
-		field("\nParent  ", f[1], "hash");
-		field("\nAuthor  ", f[2], 0);
-		field("  ", f[3], "dim");
-		sign(*f[4] && strchr(sigs, *f[4]) ? strchr(sigs, *f[4]) - sigs : 7, f[5], f[6]);
-		if (*g_strchomp(f[7])) field("\nNotes\n", f[7], "note");
+	if (!git(&o, 0, (char *[]){"git", "show", "--format=%H%x00%P%x00%an <%ae>%x00%ai%x00%G?%x00%GS%x00%B%x00%N%x00",
+		"--no-color", "--no-ext-diff", "--diff-merges=first-parent", row[i].hash, 0})) {
+		cut(o, f, 9);
+		details(0, f, *f[4] && (p = strchr(sigs, *f[4])) ? p - sigs : 7);
+		if (*g_strchomp(f[7])) put("\nNotes\n", -1, "dim"), put(f[7], -1, "note");
+		diff_files(dv, f[8] + strspn(f[8], "\n"));
 	}
 	free(o);
-	free(text);
-	git(&text, 0, (char *[]){"git", "show", "--format=", "--no-color", "--no-ext-diff", "--diff-merges=first-parent", row[i].hash, 0});
-	diff_files(dv, text);
 }
-
 
 static gboolean shown(GtkTreeModel *m, GtkTreeIter *it)
 {
@@ -298,8 +289,7 @@ static gboolean shown(GtkTreeModel *m, GtkTreeIter *it)
 	int i, r;
 	if (!query || !*query) return TRUE;
 	gtk_tree_model_get(m, it, 1, &i, -1);
-	if (!row[i].hash) return FALSE;
-	s = g_strjoin(" ", row[i].hash, row[i].refs, row[i].subject, row[i].author, NULL);
+	s = g_strdup_printf("%s %s %s %s", row[i].hash, row[i].refs, row[i].subject, row[i].author);
 	r = !!strstr(f = g_utf8_casefold(s, -1), query);
 	g_free(s);
 	g_free(f);
