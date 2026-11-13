@@ -52,7 +52,8 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
 - `diff-view.c`, `diff-view.h`: the coloured diff view, shared by commit and log.
   Each view keeps its callbacks on its own widget, so one window can hold several;
   `diff_show()` and `diff_lines()` take the view.
-  `diff_files()` shows a diff of many files, in both views: a bold title line per file (`▾ path +a −d`)
+  `diff_files()` shows a diff of many files, in both views: a bold title line per file (`▾ path +a −d`,
+  in the GTK font with the `pan-down-symbolic` or `pan-end-symbolic` icon, as the commit view list has)
   instead of the `diff --git`, `index`, `---` and `+++` lines; a click on a title hides its lines with an invisible tag,
   and `diff_fold()` does it for all titles. A map from view lines to diff lines keeps the hunk click, the menu
   and `diff_lines()` on diff lines. `diff_tools()` makes the Expand all, Collapse all and stats bar part, and
