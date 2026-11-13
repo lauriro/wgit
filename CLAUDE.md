@@ -23,7 +23,7 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   `wgit` alone opens the commit view if `git status` lists anything, else the log view.
 - `wgit c` / `wgit commit [path]` opens the commit view, like gitg's commit view.
   `wgit l` / `wgit log [path]` opens the log view, gitk-like:
-  the graph of `git log --graph --all` at the left, the selected commit and its diff at the right.
+  the graph of `git log --graph --all` at the left, the diff of the selected commit at the right and its details below.
   Any unique prefix of a subcommand works; an unknown one prints the usage and exits 1.
 
 ## Files
@@ -52,15 +52,16 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
 - `diff-view.c`, `diff-view.h`: the coloured diff view, shared by commit and log.
   Each view keeps its callbacks on its own widget, so one window can hold several;
   `diff_show()` and `diff_lines()` take the view.
-  `diff_files()` shows a whole commit for the log view: a bold title line per file (`▾ path +a −d`)
+  `diff_files()` shows a diff of many files, in both views: a bold title line per file (`▾ path +a −d`)
   instead of the `diff --git`, `index`, `---` and `+++` lines; a click on a title hides its lines with an invisible tag,
-  and `diff_fold()` does it for all titles.
-  The buffer holds the diff line for line, so a buffer line number is a diff line number.
-  This is what lets a selection map straight onto `patch()`.
+  and `diff_fold()` does it for all titles. A map from view lines to diff lines keeps the hunk click, the menu
+  and `diff_lines()` on diff lines. `diff_tools()` makes the Expand all, Collapse all and stats bar part, and
+  `diff_goto()` opens a file's section and scrolls to it.
   A click on a line that starts with `@` calls the hunk callback with `(line, -1)`.
   A right click adds to the text view menu through the menu callback,
   with the header line of the hunk under the pointer and the `+` or `-` line under it, each -1 if there is none.
-- `commit.c`: the commit view (`commit_view()`).
+- `commit.c`: the commit view (`commit_view()`); it shows the diff of the whole section of the selected file
+  and, within that section, only scrolls to the file.
 - `log.c`: the log view (`log_view()`); it checks the signature of the selected commit only, as `%G?` for all rows is slow.
   The list holds commit rows only; connector lines such as `|/` get no row.
   It loads 10,000 commits at a time: when `paint()` draws the last row of a full page, `more()` reruns
@@ -195,10 +196,10 @@ $W c > $O/log.txt 2>&1 &
 sleep 2
 shot() { import -window root $O/$1.png; }
 xdotool mousemove 60 103 click 1; sleep 1
-xdotool mousemove 400 247 click 1; sleep 1; shot 3
+xdotool mousemove 400 190 click 1; sleep 1; shot 3
 git diff --cached -U0 > $O/cached.txt
-xdotool mousemove 370 163 mousedown 1 mousemove 380 171 mousemove 385 180 mouseup 1; sleep 1
-xdotool mousemove 385 180 click 3; sleep 1; xdotool mousemove 455 222 click 1; sleep 1; shot 5
+xdotool mousemove 370 105 mousedown 1 mousemove 380 113 mousemove 385 122 mouseup 1; sleep 1
+xdotool mousemove 385 122 click 3; sleep 1; xdotool mousemove 455 164 click 1; sleep 1; shot 5
 xdotool mousemove 600 600 click 1 type 'Hello commit'; xdotool key ctrl+Return; sleep 1
 git log --stat -1 >> $O/cached.txt
 xdotool mousemove 360 676 click 1; sleep 1; shot 8
@@ -209,12 +210,13 @@ when `~/.local/state/wgit` (the size and pane positions saved on close) does not
 At that size the file pane is 341 px wide; Stage, Unstage, Revert and Ignore are at 41, 127, 215 and 297, y 22.
 List rows are 23 px apart starting at y 57,
 so with nothing staged the first unstaged row is at y 103.
-Diff lines are 17 px apart starting at y 60, under the Log and Commit switcher at 811 and 933, y 22;
+The diff shows the whole section, a title line per file, 17 px apart from y 54, under the bar with Expand all and Collapse all
+(399 and 511, y 22) and the Log and Commit switcher (811 and 933, y 22);
 the message handle is at y 527, Amend at 360,676, Cancel, Rescan and Commit at 776, 861 and 950, y 676.
 In the diff menu, Stage hunk is 17 px and Stage lines 42 px below the right click.
 To check the log view, run `$W l` in a clone of `../litejs` (mount it read-only and `git clone` it in the container):
 the filter box is at y 20, list rows are 23 px apart from y 57,
-Expand all and Collapse all are at 507 and 611, y 676.
+Expand all and Collapse all are at 508 and 620, y 22, the details below the diff.
 Read the PNGs with the Read tool to see them.
 To check the theme, add `dbus-daemon dbus-bin` to the image, run the script under `dbus-run-session --`,
 and start a small GDBus mock that owns `org.freedesktop.portal.Desktop` like tark-shell does,

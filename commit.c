@@ -18,7 +18,7 @@ static const char *verb[] = {"Stage", "Unstage", "Revert", "Ignore"}, *ask[][2] 
 };
 static const char use[] = {6, 1, 6, 4};
 static Entry *ent;
-static int nent, sec, busy, sorted, hunk, one, part, shut[3];
+static int nent, sec, busy, sorted, hunk, one, part, shown = -1, shut[3];
 static char *cur, *text;
 
 static void set(GtkTreeIter *it, char *m, int i, const char *icon, int n)
@@ -38,8 +38,7 @@ static void sel(GtkTreeSelection *s)
 	l = gtk_tree_selection_get_selected_rows(s, &m);
 	gtk_tree_view_get_cursor(GTK_TREE_VIEW(list), &p, 0);
 	g_free(cur);
-	free(text);
-	cur = text = 0;
+	cur = 0;
 	if (l) {
 		if (!p || !gtk_tree_selection_path_is_selected(s, p)) {
 			gtk_tree_path_free(p);
@@ -48,9 +47,14 @@ static void sel(GtkTreeSelection *s)
 		gtk_tree_model_get_iter(m, &it, p);
 		gtk_tree_model_get(m, &it, 1, &k, -1);
 		cur = g_strdup(ent[k].path);
-		text = diff(ent + k, !(sec = *gtk_tree_path_get_indices(p)));
+		sec = *gtk_tree_path_get_indices(p);
 	}
-	diff_show(dv, text);
+	if (!l || sec != shown) {
+		free(text);
+		diff_files(dv, text = l ? diffs(sec, ent, nent) : 0);
+		shown = l ? sec : -1;
+	}
+	if (cur) diff_goto(dv, cur);
 	for (k = 0; k < 4; k++) gtk_widget_set_sensitive(bar[k], l && use[k] >> sec & 1);
 	gtk_tree_path_free(p);
 	g_list_free_full(l, (GDestroyNotify)gtk_tree_path_free);
@@ -85,6 +89,7 @@ static void reload(void)
 		gtk_tree_path_free(tp);
 	}
 	busy = 0;
+	shown = -1;
 	sel(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
 }
 
@@ -244,6 +249,7 @@ static void pick(GtkWidget *w, gpointer p)
 	char *o;
 	if (k > 3) {
 		context = k > 4 ? MAX(1, context / 2) : 2 * context;
+		shown = -1;
 		sel(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
 	} else {
 		if (k & 1 && !diff_lines(dv, &f, &t)) f = t = one;
@@ -322,7 +328,6 @@ GtkWidget *commit_view(GtkWidget **pane)
 	pane[0] = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
 	pane[1] = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
 	l = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-	r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
 	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store = gtk_tree_store_new(4, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING, G_TYPE_INT)));
 	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, gtk_cell_renderer_pixbuf_new(), "icon-name", 2, "sensitive", 3, NULL);
 	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, gtk_cell_renderer_text_new(), "markup", 0, NULL);
@@ -343,9 +348,7 @@ GtkWidget *commit_view(GtkWidget **pane)
 		g_signal_connect(bar[k], "clicked", G_CALLBACK(run), GINT_TO_POINTER(k));
 	}
 	gtk_box_pack_start(GTK_BOX(l), scroll(list), TRUE, TRUE, 0);
-	gtk_box_pack_start(GTK_BOX(r), dv = diff_view(lines, menu), TRUE, TRUE, 0);
-	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
-	gtk_paned_pack1(GTK_PANED(pane[1]), r, TRUE, FALSE);
+	gtk_paned_pack1(GTK_PANED(pane[1]), dv = diff_view(lines, menu), TRUE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[1]), r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6), FALSE, FALSE);
 	gtk_box_pack_start(GTK_BOX(r), b = scroll(m = gtk_text_view_new()), TRUE, TRUE, 0);
 	gtk_widget_set_size_request(b, -1, 120);
@@ -359,7 +362,7 @@ GtkWidget *commit_view(GtkWidget **pane)
 	}
 	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
 	gtk_paned_pack1(GTK_PANED(pane[0]), l, FALSE, FALSE);
-	gtk_paned_pack2(GTK_PANED(pane[0]), tabs(pane[1]), TRUE, TRUE);
+	gtk_paned_pack2(GTK_PANED(pane[0]), tabs(pane[1], diff_tools(dv)), TRUE, TRUE);
 	g_signal_connect(amend, "toggled", G_CALLBACK(last), 0);
 	g_signal_connect(win, "key-press-event", G_CALLBACK(key), 0);
 	reload();

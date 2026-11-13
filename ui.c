@@ -8,7 +8,7 @@
 GtkWidget *win;
 static GtkWidget *stack, *page[2], *pane[4], *(*view[])(GtkWidget **) = {commit_view, log_view};
 static const char *title[] = {"Commit", "Log"};
-static int geo[] = {1000, 700, 300, 0, 450, 190};
+static int geo[] = {1000, 700, 300, 0, 450, 0};
 static char *conf;
 
 GtkWidget *scroll(GtkWidget *w)
@@ -86,11 +86,12 @@ static void switched(GtkStack *s)
 	show(gtk_stack_get_visible_child(s) == page[1]);
 }
 
-GtkWidget *tabs(GtkWidget *w)
+GtkWidget *tabs(GtkWidget *w, GtkWidget *tools)
 {
 	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0), *h = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), *s = gtk_stack_switcher_new();
 	gtk_stack_switcher_set_stack(GTK_STACK_SWITCHER(s), GTK_STACK(stack));
 	gtk_container_set_border_width(GTK_CONTAINER(h), 6);
+	gtk_box_pack_start(GTK_BOX(h), tools, FALSE, FALSE, 0);
 	gtk_box_pack_end(GTK_BOX(h), s, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), h, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), w, TRUE, TRUE, 0);

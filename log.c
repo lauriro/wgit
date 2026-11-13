@@ -8,7 +8,7 @@
 
 enum { W = 7, PAD = 4, PAGE = 10000 };
 
-static GtkWidget *list, *dv, *sum;
+static GtkWidget *list, *dv;
 static GtkTreeViewColumn *graph;
 static GtkListStore *store;
 static GtkTextBuffer *info;
@@ -271,7 +271,7 @@ static void pick(GtkTreeSelection *s)
 	GtkTreeModel *m;
 	GtkTreeIter it;
 	char *o, *f[8], *p;
-	int i, k, n, a, d;
+	int i, k;
 	if (!gtk_tree_selection_get_selected(s, &m, &it)) return;
 	gtk_tree_model_get(m, &it, 1, &i, -1);
 	if (!row[i].hash) return;
@@ -288,16 +288,9 @@ static void pick(GtkTreeSelection *s)
 	free(o);
 	free(text);
 	git(&text, 0, (char *[]){"git", "show", "--format=", "--no-color", "--no-ext-diff", "--diff-merges=first-parent", row[i].hash, 0});
-	n = diff_files(dv, text, &a, &d);
-	o = g_strdup_printf("%d file%s, +%d −%d", n, n == 1 ? "" : "s", a, d);
-	gtk_label_set_text(GTK_LABEL(sum), o);
-	g_free(o);
+	diff_files(dv, text);
 }
 
-static void all(gpointer hide)
-{
-	diff_fold(dv, GPOINTER_TO_INT(hide));
-}
 
 static gboolean shown(GtkTreeModel *m, GtkTreeIter *it)
 {
@@ -325,8 +318,7 @@ static void find(GtkEntry *e)
 
 GtkWidget *log_view(GtkWidget **pane)
 {
-	static const char *fold[] = {"Expand all", "Collapse all"};
-	GtkWidget *v, *r, *b, *c;
+	GtkWidget *v, *b, *c;
 	GtkTreeViewColumn *col;
 	GtkCellRenderer *t;
 	int k;
@@ -358,20 +350,12 @@ GtkWidget *log_view(GtkWidget **pane)
 	for (k = 0; k < 5; k++) gtk_text_buffer_create_tag(info, ink[k][0], "foreground", ink[k][1], NULL);
 	gtk_text_buffer_create_tag(info, "bold", "weight", PANGO_WEIGHT_BOLD, NULL);
 	gtk_text_buffer_create_tag(info, "note", "paragraph-background", "rgba(128,128,128,0.2)", NULL);
-	r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-	gtk_box_pack_start(GTK_BOX(r), dv = diff_view(0, 0), TRUE, TRUE, 0);
-	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
-	for (k = 0; k < 2; k++) {
-		gtk_box_pack_start(GTK_BOX(b), c = gtk_button_new_with_label(fold[k]), FALSE, FALSE, 0);
-		g_signal_connect_swapped(c, "clicked", G_CALLBACK(all), GINT_TO_POINTER(k));
-	}
-	gtk_box_pack_start(GTK_BOX(b), sum = gtk_label_new(0), FALSE, FALSE, 6);
-	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
 	pane[0] = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
 	pane[1] = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
-	gtk_paned_pack1(GTK_PANED(pane[1]), v = scroll(v), FALSE, FALSE);
+	gtk_paned_pack1(GTK_PANED(pane[1]), dv = diff_view(0, 0), TRUE, FALSE);
+	gtk_paned_pack2(GTK_PANED(pane[1]), v = scroll(v), FALSE, FALSE);
 	gtk_container_set_border_width(GTK_CONTAINER(v), 6);
-	gtk_paned_pack2(GTK_PANED(pane[1]), r, TRUE, FALSE);
+	gtk_widget_set_size_request(v, -1, 150);
 	b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	gtk_box_pack_start(GTK_BOX(b), c = gtk_search_entry_new(), FALSE, FALSE, 0);
 	gtk_entry_set_placeholder_text(GTK_ENTRY(c), "Filter: hash, ref, subject, author");
@@ -382,7 +366,7 @@ GtkWidget *log_view(GtkWidget **pane)
 	g_signal_connect(c, "search-changed", G_CALLBACK(find), 0);
 	gtk_box_pack_start(GTK_BOX(b), scroll(list), TRUE, TRUE, 0);
 	gtk_paned_pack1(GTK_PANED(pane[0]), b, FALSE, FALSE);
-	gtk_paned_pack2(GTK_PANED(pane[0]), tabs(pane[1]), TRUE, TRUE);
+	gtk_paned_pack2(GTK_PANED(pane[0]), tabs(pane[1], diff_tools(dv)), TRUE, TRUE);
 	stale();
 	load();
 	return pane[0];

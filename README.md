@@ -20,15 +20,16 @@ wgit is one window with two views, and the `[ Log | Commit ]` switcher at the to
 
 `wgit commit` (or `wgit c`, any unique prefix) opens the commit view, like gitg's:
 staged, unstaged and untracked files in one list on the left,
-the selected file's diff on the right,
+the diff of the selected file's section on the right, with a title per file,
 a message box and Cancel, Rescan and Commit buttons below.
 `wgit log` (or `wgit l`) opens the log view, like gitk:
-the graph of all branches at the left, the selected commit and its diff at the right.
+the graph of all branches at the left, the diff of the selected commit at the right, its details below.
 `wgit c <path>` and `wgit l <path>` work in the repo of that path.
 
 
 ## Commit view
 
+- Click a file to scroll the diff to it; a closed file opens.
 - Select files with Ctrl+click or Shift+click, all in one section.
   Stage, Unstage, Revert and Ignore above the list work on the selected files.
 - Revert asks first.
@@ -79,12 +80,12 @@ the graph of all branches at the left, the selected commit and its diff at the r
 - Each row: hash, refs as coloured boxes, subject, author and date.
   The HEAD branch is bold green, other local branches green, remote branches grey, tags yellow.
   A subject that starts with `!` (a breaking change) shows the `!` in bold red.
-- Click a commit to see its details at the right top: hash, parents, author, date,
+- Click a commit to see its diff, and below it its details: hash, parents, author, date,
   the signature check in words (green good, yellow good with a warning, red bad, grey none),
   the message and its git notes.
   A commit with git notes has a yellow square on the graph instead of a dot.
 - Click a yellow tag chip to see an annotated tag instead: target, tagger, date, signature and message.
-- The diff has one section per file: a title with the path and `+added −removed`, then its hunks.
+- Both views show the diff the same way: one section per file, a title with the path and `+added −removed`, then its hunks.
   Click a title to close or open that file; Expand all and Collapse all do it for every file.
 
 
