@@ -94,8 +94,13 @@ static gboolean paint(GtkTreeView *v, cairo_t *cr)
 			if (p[k] == '*') {
 				if (joins(i ? row[i - 1].graph : 0, k, 0)) stroke(cr, k, cx, y, cx, y + h / 2);
 				if (joins(i + 1 < nrow ? row[i + 1].graph : 0, k, 1)) stroke(cr, k, cx, y + h / 2, cx, y + h);
-				colour(cr, k);
-				cairo_arc(cr, cx, y + h / 2, 3.5, 0, 2 * G_PI);
+				if (row[i].note) {
+					cairo_set_source_rgb(cr, .88, .75, .25);
+					cairo_rectangle(cr, cx - 4, y + h / 2 - 4, 8, 8);
+				} else {
+					colour(cr, k);
+					cairo_arc(cr, cx, y + h / 2, 3.5, 0, 2 * G_PI);
+				}
 				cairo_fill(cr);
 			} else if ((s = strchr(shape, p[k]))) {
 				g = geom[s - shape];

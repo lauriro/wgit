@@ -79,6 +79,7 @@ the graph of all branches at the left, the selected commit and its diff at the r
 - Click a commit to see its details at the right top: hash, parents, author, date,
   the signature check in words (green good, yellow good with a warning, red bad, grey none),
   the message and its git notes.
+  A commit with git notes has a yellow square on the graph instead of a dot.
 - Click a yellow tag chip to see an annotated tag instead: target, tagger, date, signature and message.
 - The diff has one section per file: a title with the path and `+added −removed`, then its hunks.
   Click a title to close or open that file; Expand all and Collapse all do it for every file.
