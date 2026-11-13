@@ -57,6 +57,8 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   and `diff_fold()` does it for all titles. A map from view lines to diff lines keeps the hunk click, the menu
   and `diff_lines()` on diff lines. `diff_tools()` makes the Expand all, Collapse all and stats bar part, and
   `diff_goto()` opens a file's section and scrolls to it.
+  `stick()` draws the title of the file at the top over the view once the title has scrolled away, pushed up by
+  the next title; a press or click on it folds that file and never reaches the line under it.
   A click on a line that starts with `@` calls the hunk callback with `(line, -1)`.
   A right click adds to the text view menu through the menu callback,
   with the header line of the hunk under the pointer and the `+` or `-` line under it, each -1 if there is none.

@@ -54,11 +54,77 @@ static void fold(GtkTextBuffer *b, int l, int hide)
 	gtk_text_buffer_insert_with_tags(b, &s, hide ? "▸" : "▾", -1, tag(b, "title"), NULL);
 }
 
+static int stuck(GtkTextView *v, GtkTextIter *it, int *top, int *h)
+{
+	GtkTextTag *t = tag(gtk_text_view_get_buffer(v), "title");
+	GdkRectangle r;
+	GtkTextIter n;
+	int y, d;
+	gtk_text_view_get_visible_rect(v, &r);
+	gtk_text_view_get_line_at_y(v, it, r.y, 0);
+	if (!gtk_text_iter_has_tag(it, t)) {
+		if (!gtk_text_iter_backward_to_tag_toggle(it, t)) return 0;
+		if (!gtk_text_iter_has_tag(it, t)) gtk_text_iter_backward_char(it);
+	}
+	gtk_text_iter_set_line_offset(it, 0);
+	gtk_text_view_get_line_yrange(v, it, &y, h);
+	if (y >= r.y) return 0;
+	*top = r.y;
+	n = *it;
+	if (gtk_text_iter_forward_line(&n) && (gtk_text_iter_has_tag(&n, t) || gtk_text_iter_forward_to_tag_toggle(&n, t))) {
+		gtk_text_view_get_line_yrange(v, &n, &y, &d);
+		if (y - r.y < *h) *top = y - *h;
+	}
+	return 1;
+}
+
+static int hit(GtkTextView *v, GdkEventButton *ev, GtkTextIter *it)
+{
+	int top, h, x, y;
+	gtk_text_view_window_to_buffer_coords(v, GTK_TEXT_WINDOW_TEXT, ev->x, ev->y, &x, &y);
+	return stuck(v, it, &top, &h) && y < top + h;
+}
+
+static gboolean stick(GtkTextView *v, cairo_t *cr)
+{
+	GtkStyleContext *c = gtk_widget_get_style_context(GTK_WIDGET(v));
+	GtkTextIter it, e;
+	GdkRectangle r;
+	PangoLayout *l;
+	char *s, *p, *q, *m;
+	int top, h, x, y;
+	if (!stuck(v, &it, &top, &h)) return FALSE;
+	gtk_text_view_get_visible_rect(v, &r);
+	gtk_text_view_buffer_to_window_coords(v, GTK_TEXT_WINDOW_WIDGET, r.x, top, &x, &y);
+	gtk_render_background(c, cr, x, y, r.width, h);
+	cairo_set_source_rgba(cr, .5, .5, .5, .2);
+	cairo_rectangle(cr, x, y, r.width, h);
+	cairo_fill(cr);
+	e = it;
+	gtk_text_iter_forward_to_line_end(&e);
+	s = gtk_text_buffer_get_text(gtk_text_view_get_buffer(v), &it, &e, TRUE);
+	if ((p = g_strrstr(s, "  +")) && (q = strstr(p, " −"))) {
+		*p = *q = 0;
+		m = g_markup_printf_escaped("<b>%s  <span foreground=\"#2a2\">%s</span> <span foreground=\"#d33\">%s</span></b>", s, p + 2, q + 1);
+	} else m = g_markup_printf_escaped("<b>%s</b>", s);
+	pango_layout_set_markup(l = gtk_widget_create_pango_layout(GTK_WIDGET(v), 0), m, -1);
+	gtk_text_view_buffer_to_window_coords(v, GTK_TEXT_WINDOW_WIDGET, 0, top, &x, &y);
+	gtk_render_layout(c, cr, x, y, l);
+	g_object_unref(l);
+	g_free(m);
+	g_free(s);
+	return FALSE;
+}
+
 static gboolean click(GtkTextView *w, GdkEventButton *ev, Hunk *hunk)
 {
 	GtkTextBuffer *b = gtk_text_view_get_buffer(w);
 	GtkTextIter a, c;
 	int l;
+	if (ev->button == 1 && hit(w, ev, &a)) {
+		fold(b, gtk_text_iter_get_line(&a), -1);
+		return TRUE;
+	}
 	if (ev->button == 1 && !gtk_text_buffer_get_selection_bounds(b, &a, &c)) {
 		l = line(w, ev, &a);
 		if (gtk_text_iter_has_tag(&a, tag(b, "title"))) fold(b, l, -1);
@@ -71,6 +137,7 @@ static gboolean press(GtkTextView *w, GdkEventButton *ev)
 {
 	GtkTextIter a;
 	gunichar c;
+	if (ev->button == 1 && hit(w, ev, &a)) return TRUE;
 	if (ev->button == 3) {
 		one = at = line(w, ev, &a);
 		c = gtk_text_iter_get_char(&a);
@@ -102,10 +169,9 @@ GtkWidget *diff_view(Hunk *hunk, Menu *menu)
 	gtk_text_buffer_create_tag(b, "hide", "invisible", TRUE, NULL);
 	g_object_set_data_full(G_OBJECT(v), "map", g_array_new(FALSE, FALSE, sizeof(int)), (GDestroyNotify)g_array_unref);
 	g_signal_connect(v, "button-release-event", G_CALLBACK(click), hunk);
-	if (menu) {
-		g_signal_connect(v, "button-press-event", G_CALLBACK(press), 0);
-		g_signal_connect(v, "populate-popup", G_CALLBACK(popup), menu);
-	}
+	g_signal_connect(v, "button-press-event", G_CALLBACK(press), 0);
+	g_signal_connect_after(v, "draw", G_CALLBACK(stick), 0);
+	if (menu) g_signal_connect(v, "populate-popup", G_CALLBACK(popup), menu);
 	gtk_container_add(GTK_CONTAINER(s), v);
 	gtk_widget_set_margin_start(s, 6);
 	gtk_widget_set_margin_end(s, 6);

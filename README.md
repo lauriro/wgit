@@ -87,6 +87,7 @@ the graph of all branches at the left, the diff of the selected commit at the ri
 - Click a yellow tag chip to see an annotated tag instead: target, tagger, date, signature and message.
 - Both views show the diff the same way: one section per file, a title with the path and `+added −removed`, then its hunks.
   Click a title to close or open that file; Expand all and Collapse all do it for every file.
+  The title of the file at the top stays visible while you scroll, until the next title pushes it out.
 
 
 ## Contributing
