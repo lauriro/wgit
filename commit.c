@@ -18,7 +18,7 @@ static const char *verb[] = {"Stage", "Unstage", "Revert", "Ignore"}, *ask[][2] 
 };
 static const char use[] = {6, 1, 6, 4};
 static Entry *ent;
-static int nent, sec, busy, sorted, hunk, one, part, shown = -1, shut[3];
+static int nent, sec, busy, follow, sorted, hunk, one, part, shown = -1, shut[3];
 static char *cur, *text;
 
 static void set(GtkTreeIter *it, char *m, int i, const char *icon, int n)
@@ -54,10 +54,29 @@ static void sel(GtkTreeSelection *s)
 		diff_files(dv, text = l ? diffs(sec, ent, nent) : 0);
 		shown = l ? sec : -1;
 	}
-	if (cur) diff_goto(dv, cur);
+	if (cur && !follow) diff_goto(dv, cur);
 	for (k = 0; k < 4; k++) gtk_widget_set_sensitive(bar[k], l && use[k] >> sec & 1);
 	gtk_tree_path_free(p);
 	g_list_free_full(l, (GDestroyNotify)gtk_tree_path_free);
+}
+
+static void top(const char *path)
+{
+	GtkTreeModel *m = GTK_TREE_MODEL(store);
+	GtkTreeIter hd, it;
+	GtkTreePath *p;
+	int k, ok;
+	if (shown < 0 || gtk_tree_selection_count_selected_rows(gtk_tree_view_get_selection(GTK_TREE_VIEW(list))) > 1) return;
+	gtk_tree_model_iter_nth_child(m, &hd, 0, shown);
+	for (ok = gtk_tree_model_iter_children(m, &it, &hd); ok; ok = gtk_tree_model_iter_next(m, &it)) {
+		gtk_tree_model_get(m, &it, 1, &k, -1);
+		if (strcmp(ent[k].path, path)) continue;
+		p = gtk_tree_model_get_path(m, &it);
+		follow = 1;
+		gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), p, 0, FALSE);
+		follow = 0;
+		gtk_tree_path_free(p);
+	}
 }
 
 static void reload(void)
@@ -348,7 +367,7 @@ GtkWidget *commit_view(GtkWidget **pane)
 		g_signal_connect(bar[k], "clicked", G_CALLBACK(run), GINT_TO_POINTER(k));
 	}
 	gtk_box_pack_start(GTK_BOX(l), scroll(list), TRUE, TRUE, 0);
-	gtk_paned_pack1(GTK_PANED(pane[1]), dv = diff_view(lines, menu), TRUE, FALSE);
+	gtk_paned_pack1(GTK_PANED(pane[1]), dv = diff_view(lines, menu, top), TRUE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[1]), r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6), FALSE, FALSE);
 	gtk_box_pack_start(GTK_BOX(r), b = scroll(m = gtk_text_view_new()), TRUE, TRUE, 0);
 	gtk_widget_set_size_request(b, -1, 120);

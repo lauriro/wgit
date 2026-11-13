@@ -63,6 +63,9 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   Its band has no outer margin; the arrow image carries the view's left margin, so the name lines up with the content.
   `stick()` draws the title of the file at the top over the view once the title has scrolled away, pushed up by
   the next title; a press or click on it folds that file and never reaches the line under it.
+  With a top callback (the commit view's `top()`), a scroll that takes the section of the `goto` file out of sight
+  moves the mark to the file at the top and passes its path; the list cursor follows it,
+  unless more than one file is selected, and `follow` keeps `sel()` from scrolling the diff back.
   A click on a line that starts with `@` calls the hunk callback with `(line, -1)`.
   A right click adds to the text view menu through the menu callback,
   with the header line of the hunk under the pointer and the `+` or `-` line under it, each -1 if there is none.

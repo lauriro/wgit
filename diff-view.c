@@ -5,6 +5,7 @@
 
 typedef void Hunk(int from, int to);
 typedef void Menu(GtkMenu *m, int hunk, int line);
+typedef void Top(const char *path);
 
 /* A file list row has this much space above its arrow and text and below its text. */
 #define PAD 3
@@ -77,6 +78,46 @@ static void fold(GtkTextView *v, int l, int hide)
 	gtk_text_buffer_apply_tag(b, tag(b, "title"), &e, &s);
 }
 
+static int above(GtkTextView *v, GtkTextIter *it, int y)
+{
+	GtkTextTag *t = tag(gtk_text_view_get_buffer(v), "title");
+	gtk_text_view_get_line_at_y(v, it, y, 0);
+	if (!gtk_text_iter_has_tag(it, t)) {
+		if (!gtk_text_iter_backward_to_tag_toggle(it, t)) return 0;
+		if (!gtk_text_iter_has_tag(it, t)) gtk_text_iter_backward_char(it);
+	}
+	gtk_text_iter_set_line_offset(it, 0);
+	return 1;
+}
+
+static void moved(GtkAdjustment *a, GtkTextView *v)
+{
+	GtkTextBuffer *b = gtk_text_view_get_buffer(v);
+	GtkTextMark *g = gtk_text_buffer_get_mark(b, "goto");
+	GtkTextIter it, e;
+	GdkRectangle r;
+	char *s, *p;
+	int y, end, h;
+	if (!g) return;
+	gtk_text_view_get_visible_rect(v, &r);
+	gtk_text_buffer_get_iter_at_mark(b, &it, g);
+	gtk_text_view_get_line_yrange(v, &it, &y, &h);
+	e = it;
+	if (gtk_text_iter_forward_line(&e) && !gtk_text_iter_has_tag(&e, tag(b, "title"))) gtk_text_iter_forward_to_tag_toggle(&e, tag(b, "title"));
+	gtk_text_view_get_line_yrange(v, &e, &end, &h);
+	if (!gtk_text_iter_has_tag(&e, tag(b, "title"))) end += h;
+	if ((y < r.y + r.height && end > r.y) || !above(v, &it, r.y)) return;
+	gtk_text_buffer_move_mark(b, g, &it);
+	e = it;
+	gtk_text_iter_forward_to_line_end(&e);
+	s = gtk_text_buffer_get_text(b, &it, &e, TRUE);
+	if ((p = g_strrstr(s, "  +"))) {
+		*p = 0;
+		((Top *)g_object_get_data(G_OBJECT(v), "top"))(s + 1);
+	}
+	g_free(s);
+}
+
 static int stuck(GtkTextView *v, GtkTextIter *it, int *top, int *h)
 {
 	GtkTextTag *t = tag(gtk_text_view_get_buffer(v), "title");
@@ -84,12 +125,7 @@ static int stuck(GtkTextView *v, GtkTextIter *it, int *top, int *h)
 	GtkTextIter n;
 	int y, d;
 	gtk_text_view_get_visible_rect(v, &r);
-	gtk_text_view_get_line_at_y(v, it, r.y, 0);
-	if (!gtk_text_iter_has_tag(it, t)) {
-		if (!gtk_text_iter_backward_to_tag_toggle(it, t)) return 0;
-		if (!gtk_text_iter_has_tag(it, t)) gtk_text_iter_backward_char(it);
-	}
-	gtk_text_iter_set_line_offset(it, 0);
+	if (!above(v, it, r.y)) return 0;
 	gtk_text_view_get_line_yrange(v, it, &y, h);
 	if (y >= r.y) return 0;
 	*top = r.y;
@@ -187,7 +223,7 @@ static void all(GtkWidget *c, gpointer hide)
 	diff_fold(g_object_get_data(G_OBJECT(c), "view"), GPOINTER_TO_INT(hide));
 }
 
-GtkWidget *diff_view(Hunk *hunk, Menu *menu)
+GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 {
 	GtkWidget *s = gtk_scrolled_window_new(0, 0), *v = gtk_text_view_new();
 	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(v));
@@ -204,6 +240,10 @@ GtkWidget *diff_view(Hunk *hunk, Menu *menu)
 	g_signal_connect_after(v, "draw", G_CALLBACK(stick), 0);
 	if (menu) g_signal_connect(v, "populate-popup", G_CALLBACK(popup), menu);
 	gtk_container_add(GTK_CONTAINER(s), v);
+	if (top) {
+		g_object_set_data(G_OBJECT(v), "top", top);
+		g_signal_connect(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(s)), "value-changed", G_CALLBACK(moved), v);
+	}
 	gtk_text_view_set_left_margin(GTK_TEXT_VIEW(v), 6);
 	gtk_text_view_set_right_margin(GTK_TEXT_VIEW(v), 6);
 	gtk_text_view_set_bottom_margin(GTK_TEXT_VIEW(v), 6);

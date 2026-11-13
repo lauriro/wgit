@@ -30,6 +30,7 @@ the graph of all branches at the left, the diff of the selected commit at the ri
 ## Commit view
 
 - Click a file to scroll the diff to it; a closed file opens.
+  When you scroll the diff to the next file, the list selects that file, unless you selected more than one.
 - Select files with Ctrl+click or Shift+click, all in one section.
   Stage, Unstage, Revert and Ignore above the list work on the selected files.
 - Revert asks first.

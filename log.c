@@ -352,7 +352,7 @@ GtkWidget *log_view(GtkWidget **pane)
 	gtk_text_buffer_create_tag(info, "note", "paragraph-background", "rgba(128,128,128,0.2)", NULL);
 	pane[0] = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
 	pane[1] = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
-	gtk_paned_pack1(GTK_PANED(pane[1]), dv = diff_view(0, 0), TRUE, FALSE);
+	gtk_paned_pack1(GTK_PANED(pane[1]), dv = diff_view(0, 0, 0), TRUE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[1]), v = scroll(v), FALSE, FALSE);
 	gtk_container_set_border_width(GTK_CONTAINER(v), 6);
 	gtk_widget_set_size_request(v, -1, 150);
