@@ -65,6 +65,8 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop` when the user switches
   It loads 10,000 commits at a time: when `paint()` draws the last row of a full page, `more()` reruns
   `history()` with a bigger limit and `fill()` adds only the new rows, so selection and scroll stay.
   A filter search loads all commits first.
+  `stale()` keys the refs (`git for-each-ref` with `%(HEAD)`, and `git rev-parse HEAD`); a switch to the log view
+  reloads only when the key changed, and `more()` reloads in full instead of adding a page then.
   The graph column is empty; after GTK draws the visible rows, `paint()` draws the graph with cairo,
   mirrored so the first column is next to the hash. `span()` maps the git text lines from one commit to the next
   onto the one row height between their centres, so connector lines share that space and lines join:

@@ -13,7 +13,7 @@ static GtkTreeViewColumn *graph;
 static GtkListStore *store;
 static GtkTextBuffer *info;
 static Row *row;
-static char *text, *query;
+static char *text, *query, *seen;
 static GtkTreeModel *filter;
 static int nrow, cells, ncom, limit, pending;
 static double x0;
@@ -90,12 +90,43 @@ static void fill(int from)
 	gtk_tree_view_column_set_fixed_width(graph, 2 * PAD + cells * W);
 }
 
+static int stale(void)
+{
+	char *a, *b, *t;
+	int r;
+	git(&a, 0, (char *[]){"git", "for-each-ref", "--format=%(HEAD)%(objectname)%(refname)", 0});
+	git(&b, 0, (char *[]){"git", "rev-parse", "HEAD", 0});
+	t = g_strconcat(a, b, NULL);
+	r = !seen || strcmp(seen, t);
+	free(a);
+	free(b);
+	g_free(seen);
+	seen = t;
+	return r;
+}
+
+static void load(void)
+{
+	GtkTreePath *p;
+	gtk_tree_view_set_model(GTK_TREE_VIEW(list), 0);
+	gtk_list_store_clear(store);
+	cells = ncom = 0;
+	row = history(&nrow, limit = PAGE);
+	fill(0);
+	gtk_tree_view_set_model(GTK_TREE_VIEW(list), filter);
+	gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), p = gtk_tree_path_new_first(), 0, FALSE);
+	gtk_tree_path_free(p);
+}
+
 static gboolean more(gpointer all)
 {
 	int from = nrow;
-	row = history(&nrow, limit = all ? 1 << 30 : limit + PAGE);
-	fill(from);
 	pending = 0;
+	if (stale()) load();
+	else {
+		row = history(&nrow, limit = all ? 1 << 30 : limit + PAGE);
+		fill(from);
+	}
 	return FALSE;
 }
 
@@ -291,18 +322,6 @@ static void find(GtkEntry *e)
 	gtk_tree_view_column_set_visible(graph, !*query);
 }
 
-static void load(void)
-{
-	GtkTreePath *p;
-	gtk_tree_view_set_model(GTK_TREE_VIEW(list), 0);
-	gtk_list_store_clear(store);
-	cells = ncom = 0;
-	row = history(&nrow, limit = PAGE);
-	fill(0);
-	gtk_tree_view_set_model(GTK_TREE_VIEW(list), filter);
-	gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), p = gtk_tree_path_new_first(), 0, FALSE);
-	gtk_tree_path_free(p);
-}
 
 GtkWidget *log_view(GtkWidget **pane)
 {
@@ -312,7 +331,7 @@ GtkWidget *log_view(GtkWidget **pane)
 	GtkCellRenderer *t;
 	int k;
 	if (pane[0]) {
-		load();
+		if (stale()) load();
 		return pane[0];
 	}
 	filter = gtk_tree_model_filter_new(GTK_TREE_MODEL(store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_INT)), 0);
@@ -364,6 +383,7 @@ GtkWidget *log_view(GtkWidget **pane)
 	gtk_box_pack_start(GTK_BOX(b), scroll(list), TRUE, TRUE, 0);
 	gtk_paned_pack1(GTK_PANED(pane[0]), b, FALSE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[0]), tabs(pane[1]), TRUE, TRUE);
+	stale();
 	load();
 	return pane[0];
 }
