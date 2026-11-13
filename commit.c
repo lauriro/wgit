@@ -18,7 +18,7 @@ static const char *verb[] = {"Stage", "Unstage", "Revert", "Ignore"}, *ask[][2] 
 };
 static const char use[] = {6, 1, 6, 4};
 static Entry *ent;
-static int nent, sec, busy, follow, sorted, hunk, one, part, shown = -1, shut[3];
+static int nent, sec, busy, follow, sorted, hunk, part, shown = -1, shut[3];
 static char *cur, *text;
 
 static void set(GtkTreeIter *it, char *m, int i, const char *icon, int n)
@@ -271,18 +271,17 @@ static void pick(GtkWidget *w, gpointer p)
 		shown = -1;
 		sel(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
 	} else {
-		if (k & 1 && !diff_lines(dv, &f, &t)) f = t = one;
+		if (k & 1) diff_lines(dv, &f, &t);
 		if (k < 2 || sure(g_strdup_printf(ask[k][0], cur), ask[k][1])) done(apply(&o, text, f, t, k < 2 ? !sec : 2), &o);
 	}
 }
 
-static void menu(GtkMenu *m, int h, int l)
+static void menu(GtkMenu *m, int h)
 {
 	static const char *name[] = {"Stage hunk", "Stage lines", "Revert hunk", "Revert lines", "More context", "Less context", "Unstage hunk", "Unstage lines"};
 	GtkWidget *i;
-	int f, t, k, n = 0, has = diff_lines(dv, &f, &t) || l >= 0;
+	int f, t, k, n = 0, has = diff_lines(dv, &f, &t);
 	hunk = h;
-	one = l;
 	for (k = 0; k < 6; k++) {
 		if ((k == 2 || k == 3) && sec != 1) continue;
 		if (k == 4) gtk_menu_shell_insert(GTK_MENU_SHELL(m), gtk_separator_menu_item_new(), n++);
@@ -367,7 +366,7 @@ GtkWidget *commit_view(GtkWidget **pane)
 		g_signal_connect(bar[k], "clicked", G_CALLBACK(run), GINT_TO_POINTER(k));
 	}
 	gtk_box_pack_start(GTK_BOX(l), scroll(list), TRUE, TRUE, 0);
-	gtk_paned_pack1(GTK_PANED(pane[1]), dv = diff_view(lines, menu, top), TRUE, FALSE);
+	gtk_paned_pack1(GTK_PANED(pane[1]), gtk_widget_get_parent(dv = diff_view(lines, menu, top)), TRUE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[1]), r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6), FALSE, FALSE);
 	gtk_box_pack_start(GTK_BOX(r), b = scroll(m = gtk_text_view_new()), TRUE, TRUE, 0);
 	gtk_widget_set_size_request(b, -1, 120);

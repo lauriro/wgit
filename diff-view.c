@@ -2,9 +2,10 @@
 #include <gtk/gtk.h>
 #include <string.h>
 #include "diff-view.h"
+#include "ui.h"
 
 typedef void Hunk(int from, int to);
-typedef void Menu(GtkMenu *m, int hunk, int line);
+typedef void Menu(GtkMenu *m, int hunk);
 typedef void Top(const char *path);
 
 /* A file list row has this much space above its arrow and text and below its text. */
@@ -18,11 +19,6 @@ static const char *tags[][2] = {
 	{"+", "#2a2"},
 	{"-", "#d33"},
 };
-
-static GtkTextBuffer *buf(GtkWidget *s)
-{
-	return gtk_text_view_get_buffer(GTK_TEXT_VIEW(gtk_bin_get_child(GTK_BIN(s))));
-}
 
 static int map(GtkWidget *w, int l)
 {
@@ -215,7 +211,7 @@ static gboolean press(GtkTextView *w, GdkEventButton *ev)
 
 static void popup(GtkTextView *w, GtkWidget *m, Menu *menu)
 {
-	if (GTK_IS_MENU(m)) menu(GTK_MENU(m), map(GTK_WIDGET(w), at), map(GTK_WIDGET(w), one));
+	if (GTK_IS_MENU(m)) menu(GTK_MENU(m), map(GTK_WIDGET(w), at));
 }
 
 static void all(GtkWidget *c, gpointer hide)
@@ -225,29 +221,24 @@ static void all(GtkWidget *c, gpointer hide)
 
 GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 {
-	GtkWidget *s = gtk_scrolled_window_new(0, 0), *v = gtk_text_view_new();
+	GtkWidget *v = g_object_new(GTK_TYPE_TEXT_VIEW, "editable", FALSE, "monospace", TRUE, "left-margin", 6, "right-margin", 6, "bottom-margin", 6, NULL);
+	GtkWidget *s = scroll(v);
 	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(v));
 	int i;
-	gtk_text_view_set_editable(GTK_TEXT_VIEW(v), FALSE);
-	gtk_text_view_set_monospace(GTK_TEXT_VIEW(v), TRUE);
 	for (i = 0; i < 4; i++) gtk_text_buffer_create_tag(b, tags[i][0], "foreground", tags[i][1], NULL);
 	if (!font) g_object_get(gtk_settings_get_default(), "gtk-font-name", &font, NULL);
 	gtk_text_buffer_create_tag(b, "title", "font", font, "weight", PANGO_WEIGHT_BOLD, "pixels-below-lines", PAD, "left-margin", 0, "right-margin", 0, "paragraph-background", "rgba(128,128,128,0.2)", NULL);
 	gtk_text_buffer_create_tag(b, "hide", "invisible", TRUE, NULL);
-	g_object_set_data_full(G_OBJECT(v), "map", g_array_new(FALSE, FALSE, sizeof(int)), (GDestroyNotify)g_array_unref);
+	g_object_set_data(G_OBJECT(v), "map", g_array_new(FALSE, FALSE, sizeof(int)));
 	g_signal_connect(v, "button-release-event", G_CALLBACK(click), hunk);
 	g_signal_connect(v, "button-press-event", G_CALLBACK(press), 0);
 	g_signal_connect_after(v, "draw", G_CALLBACK(stick), 0);
 	if (menu) g_signal_connect(v, "populate-popup", G_CALLBACK(popup), menu);
-	gtk_container_add(GTK_CONTAINER(s), v);
 	if (top) {
 		g_object_set_data(G_OBJECT(v), "top", top);
 		g_signal_connect(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(s)), "value-changed", G_CALLBACK(moved), v);
 	}
-	gtk_text_view_set_left_margin(GTK_TEXT_VIEW(v), 6);
-	gtk_text_view_set_right_margin(GTK_TEXT_VIEW(v), 6);
-	gtk_text_view_set_bottom_margin(GTK_TEXT_VIEW(v), 6);
-	return s;
+	return v;
 }
 
 GtkWidget *diff_tools(GtkWidget *view)
@@ -260,9 +251,7 @@ GtkWidget *diff_tools(GtkWidget *view)
 		g_object_set_data(G_OBJECT(c), "view", view);
 		g_signal_connect(c, "clicked", G_CALLBACK(all), GINT_TO_POINTER(k));
 	}
-	gtk_box_pack_start(GTK_BOX(b), c = gtk_label_new(0), TRUE, TRUE, 6);
-	gtk_label_set_ellipsize(GTK_LABEL(c), PANGO_ELLIPSIZE_END);
-	gtk_label_set_xalign(GTK_LABEL(c), 0);
+	gtk_box_pack_start(GTK_BOX(b), c = g_object_new(GTK_TYPE_LABEL, "ellipsize", PANGO_ELLIPSIZE_END, "xalign", 0., NULL), TRUE, TRUE, 6);
 	g_object_set_data(G_OBJECT(view), "sum", c);
 	return b;
 }
@@ -271,37 +260,36 @@ static void title(GtkTextView *v, GArray *map, GtkTextMark *m, int at, const cha
 {
 	GtkTextBuffer *b = gtk_text_view_get_buffer(v);
 	GtkTextIter it, st;
-	char *t = g_utf8_make_valid(name, len), s[32];
+	char s[32];
 	gtk_text_buffer_get_iter_at_mark(b, &it, m);
 	g_array_insert_val(map, gtk_text_iter_get_line(&it), at);
 	arrow(v, &it, 0);
 	gtk_text_buffer_insert(b, &it, " ", -1);
-	gtk_text_buffer_insert(b, &it, t, -1);
+	gtk_text_buffer_insert(b, &it, name, len);
 	snprintf(s, sizeof s, "  +%d", a);
 	gtk_text_buffer_insert_with_tags_by_name(b, &it, s, -1, "+", NULL);
 	snprintf(s, sizeof s, " −%d\n", d);
 	gtk_text_buffer_insert_with_tags_by_name(b, &it, s, -1, "-", NULL);
 	gtk_text_buffer_get_iter_at_mark(b, &st, m);
-	gtk_text_buffer_apply_tag_by_name(b, "title", &st, &it);
+	gtk_text_buffer_apply_tag(b, tag(b, "title"), &st, &it);
 	gtk_text_buffer_delete_mark(b, m);
-	g_free(t);
 }
 
 void diff_files(GtkWidget *view, const char *text)
 {
-	GtkTextBuffer *b = buf(view);
-	GtkTextView *tv = GTK_TEXT_VIEW(gtk_bin_get_child(GTK_BIN(view)));
-	GArray *map = g_object_get_data(G_OBJECT(tv), "map");
+	GtkTextView *tv = GTK_TEXT_VIEW(view);
+	GtkTextBuffer *b = gtk_text_view_get_buffer(tv);
+	GArray *map = g_object_get_data(G_OBJECT(view), "map");
 	GtkWidget *sum = g_object_get_data(G_OBJECT(view), "sum");
 	GtkTextMark *m = 0;
 	GtkTextIter it;
 	const char *p, *e, *n, *name = 0;
-	char *t, s[2] = "";
+	char *t = g_utf8_make_valid(text ? text : "", -1), s[2] = "";
 	int files = 0, hdr = 0, len = 0, a = 0, d = 0, add = 0, del = 0, top = 0, l, k;
 	gtk_text_buffer_set_text(b, "", 0);
-	gtk_text_buffer_get_start_iter(b, &it);
+	gtk_text_buffer_get_end_iter(b, &it);
 	g_array_set_size(map, 0);
-	for (p = text, l = 0; p && *p; p = n, l++) {
+	for (p = t, l = 0; *p; p = n, l++) {
 		e = p + strcspn(p, "\n");
 		n = e + !!*e;
 		if (!strncmp(p, "diff --git ", 11)) {
@@ -322,12 +310,11 @@ void diff_files(GtkWidget *view, const char *text)
 		if (hdr && (!strncmp(p, "index ", 6) || !strncmp(p, "--- ", 4) || !strncmp(p, "+++ ", 4))) continue;
 		if (!hdr) a += *p == '+', d += *p == '-', add += *p == '+', del += *p == '-';
 		*s = *p;
-		t = g_utf8_make_valid(p, n - p);
 		g_array_append_val(map, l);
-		gtk_text_buffer_insert_with_tags_by_name(b, &it, t, -1, hdr ? "head" : strchr("@+-", *p) ? s : 0, NULL);
-		g_free(t);
+		gtk_text_buffer_insert_with_tags_by_name(b, &it, p, n - p, hdr ? "head" : strchr("@+-", *p) ? s : 0, NULL);
 	}
 	if (m) title(tv, map, m, top, name, len, a, d);
+	g_free(t);
 	if (sum) {
 		t = g_strdup_printf("%d file%s, +%d −%d", files, files == 1 ? "" : "s", add, del);
 		gtk_label_set_text(GTK_LABEL(sum), t);
@@ -337,18 +324,19 @@ void diff_files(GtkWidget *view, const char *text)
 
 void diff_fold(GtkWidget *view, int hide)
 {
-	GtkTextBuffer *b = buf(view);
+	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(view));
 	GtkTextIter it;
 	int l, n = gtk_text_buffer_get_line_count(b);
 	for (l = 0; l < n; l++) {
 		gtk_text_buffer_get_iter_at_line(b, &it, l);
-		if (gtk_text_iter_has_tag(&it, tag(b, "title"))) fold(GTK_TEXT_VIEW(gtk_bin_get_child(GTK_BIN(view))), l, hide);
+		if (gtk_text_iter_has_tag(&it, tag(b, "title"))) fold(GTK_TEXT_VIEW(view), l, hide);
 	}
 }
 
 void diff_goto(GtkWidget *view, const char *path)
 {
-	GtkTextBuffer *b = buf(view);
+	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(view));
+	GtkTextMark *g;
 	GtkTextIter it, e;
 	char *t, *p;
 	int l, n = gtk_text_buffer_get_line_count(b), k = strlen(path), hit;
@@ -361,11 +349,11 @@ void diff_goto(GtkWidget *view, const char *path)
 		hit = (p = strchr(t, ' ')) && !strncmp(p + 1, path, k) && !strncmp(p + 1 + k, "  +", 3);
 		g_free(t);
 		if (!hit) continue;
-		fold(GTK_TEXT_VIEW(gtk_bin_get_child(GTK_BIN(view))), l, 0);
+		fold(GTK_TEXT_VIEW(view), l, 0);
 		gtk_text_buffer_get_iter_at_line(b, &it, l);
-		if (gtk_text_buffer_get_mark(b, "goto")) gtk_text_buffer_move_mark_by_name(b, "goto", &it);
-		else gtk_text_buffer_create_mark(b, "goto", &it, TRUE);
-		gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(gtk_bin_get_child(GTK_BIN(view))), gtk_text_buffer_get_mark(b, "goto"), 0, TRUE, 0, 0);
+		if ((g = gtk_text_buffer_get_mark(b, "goto"))) gtk_text_buffer_move_mark(b, g, &it);
+		else g = gtk_text_buffer_create_mark(b, "goto", &it, TRUE);
+		gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(view), g, 0, TRUE, 0, 0);
 		return;
 	}
 }
@@ -373,10 +361,9 @@ void diff_goto(GtkWidget *view, const char *path)
 int diff_lines(GtkWidget *view, int *from, int *to)
 {
 	GtkTextIter a, b;
-	GtkWidget *v = gtk_bin_get_child(GTK_BIN(view));
-	int r = gtk_text_buffer_get_selection_bounds(buf(view), &a, &b);
-	*from = map(v, gtk_text_iter_get_line(&a));
-	*to = map(v, gtk_text_iter_get_line(&b) - (gtk_text_iter_starts_line(&b) && !gtk_text_iter_equal(&a, &b)));
-	return r;
+	if (!gtk_text_buffer_get_selection_bounds(gtk_text_view_get_buffer(GTK_TEXT_VIEW(view)), &a, &b)) return *from = *to = map(view, one), one >= 0;
+	*from = map(view, gtk_text_iter_get_line(&a));
+	*to = map(view, gtk_text_iter_get_line(&b) - gtk_text_iter_starts_line(&b));
+	return 1;
 }
 
