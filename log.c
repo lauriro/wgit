@@ -268,6 +268,7 @@ static void load(void)
 	GtkTreePath *p;
 	char *m;
 	int i, k;
+	gtk_tree_view_set_model(GTK_TREE_VIEW(list), 0);
 	gtk_list_store_clear(store);
 	cells = 0;
 	row = history(&nrow);
@@ -279,6 +280,7 @@ static void load(void)
 		gtk_list_store_insert_with_values(store, 0, -1, 0, m, 1, i, -1);
 		g_free(m);
 	}
+	gtk_tree_view_set_model(GTK_TREE_VIEW(list), filter);
 	gtk_tree_view_column_set_fixed_width(graph, 2 * PAD + cells * W);
 	gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), p = gtk_tree_path_new_first(), 0, FALSE);
 	gtk_tree_path_free(p);
