@@ -6,6 +6,9 @@
 typedef void Hunk(int from, int to);
 typedef void Menu(GtkMenu *m, int hunk, int line);
 
+/* A file list row has this much space above its arrow and text and below its text. */
+#define PAD 3
+
 static int at = -1, one = -1;
 static char *font;
 static const char *tags[][2] = {
@@ -43,10 +46,16 @@ static GtkTextTag *tag(GtkTextBuffer *b, const char *name)
 static void arrow(GtkTextView *v, GtkTextIter *it, int closed)
 {
 	GtkIconInfo *i = gtk_icon_theme_lookup_icon(gtk_icon_theme_get_default(), closed ? "pan-end-symbolic" : "pan-down-symbolic", 16, 0);
-	GdkPixbuf *p = i ? gtk_icon_info_load_symbolic_for_context(i, gtk_widget_get_style_context(GTK_WIDGET(v)), 0, 0) : 0;
-	if (p) gtk_text_buffer_insert_pixbuf(gtk_text_view_get_buffer(v), it, p);
-	else gtk_text_buffer_insert(gtk_text_view_get_buffer(v), it, closed ? "▸" : "▾", -1);
-	if (p) g_object_unref(p);
+	GdkPixbuf *p = i ? gtk_icon_info_load_symbolic_for_context(i, gtk_widget_get_style_context(GTK_WIDGET(v)), 0, 0) : 0, *q;
+	int m = gtk_text_view_get_left_margin(v);
+	if (p) {
+		q = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, m + gdk_pixbuf_get_width(p), gdk_pixbuf_get_height(p));
+		gdk_pixbuf_fill(q, 0);
+		gdk_pixbuf_copy_area(p, 0, 0, gdk_pixbuf_get_width(p), gdk_pixbuf_get_height(p) - PAD, q, m, PAD);
+		gtk_text_buffer_insert_pixbuf(gtk_text_view_get_buffer(v), it, q);
+		g_object_unref(q);
+		g_object_unref(p);
+	} else gtk_text_buffer_insert(gtk_text_view_get_buffer(v), it, closed ? "▸" : "▾", -1);
 	if (i) g_object_unref(i);
 }
 
@@ -107,20 +116,14 @@ static gboolean stick(GtkTextView *v, cairo_t *cr)
 	GdkPixbuf *pb;
 	PangoLayout *l;
 	char *s, *p, *q, *m;
-	int top, h, x, y, w = 0;
+	int top, h, x, y, lh, w = 0;
 	if (!stuck(v, &it, &top, &h)) return FALSE;
 	gtk_text_view_get_visible_rect(v, &r);
 	gtk_text_view_buffer_to_window_coords(v, GTK_TEXT_WINDOW_WIDGET, r.x, top, &x, &y);
 	gtk_render_background(c, cr, x, y, r.width, h);
-	gtk_text_view_buffer_to_window_coords(v, GTK_TEXT_WINDOW_WIDGET, r.x + gtk_text_view_get_left_margin(v), top, &x, &y);
 	cairo_set_source_rgba(cr, .5, .5, .5, .2);
-	cairo_rectangle(cr, x, y, r.width - gtk_text_view_get_left_margin(v) - gtk_text_view_get_right_margin(v), h);
+	cairo_rectangle(cr, x, y, r.width, h);
 	cairo_fill(cr);
-	if ((pb = gtk_text_iter_get_pixbuf(&it))) {
-		gdk_cairo_set_source_pixbuf(cr, pb, x, y + (h - gdk_pixbuf_get_height(pb)) / 2);
-		cairo_paint(cr);
-		w = gdk_pixbuf_get_width(pb);
-	}
 	e = it;
 	gtk_text_iter_forward_to_line_end(&e);
 	s = gtk_text_buffer_get_text(gtk_text_view_get_buffer(v), &it, &e, TRUE);
@@ -129,6 +132,13 @@ static gboolean stick(GtkTextView *v, cairo_t *cr)
 		m = g_markup_printf_escaped("<span font=\"%s\" weight=\"bold\">%s  <span foreground=\"#2a2\">%s</span> <span foreground=\"#d33\">%s</span></span>", font, s, p + 2, q + 1);
 	} else m = g_markup_printf_escaped("<span font=\"%s\" weight=\"bold\">%s</span>", font, s);
 	pango_layout_set_markup(l = gtk_widget_create_pango_layout(GTK_WIDGET(v), 0), m, -1);
+	pango_layout_get_pixel_size(l, 0, &lh);
+	y += h - PAD - lh;
+	if ((pb = gtk_text_iter_get_pixbuf(&it))) {
+		gdk_cairo_set_source_pixbuf(cr, pb, x, y + pango_layout_get_baseline(l) / PANGO_SCALE - gdk_pixbuf_get_height(pb));
+		cairo_paint(cr);
+		w = gdk_pixbuf_get_width(pb);
+	}
 	gtk_render_layout(c, cr, x + w, y, l);
 	g_object_unref(l);
 	g_free(m);
@@ -186,7 +196,7 @@ GtkWidget *diff_view(Hunk *hunk, Menu *menu)
 	gtk_text_view_set_monospace(GTK_TEXT_VIEW(v), TRUE);
 	for (i = 0; i < 4; i++) gtk_text_buffer_create_tag(b, tags[i][0], "foreground", tags[i][1], NULL);
 	if (!font) g_object_get(gtk_settings_get_default(), "gtk-font-name", &font, NULL);
-	gtk_text_buffer_create_tag(b, "title", "font", font, "weight", PANGO_WEIGHT_BOLD, "paragraph-background", "rgba(128,128,128,0.2)", NULL);
+	gtk_text_buffer_create_tag(b, "title", "font", font, "weight", PANGO_WEIGHT_BOLD, "pixels-below-lines", PAD, "left-margin", 0, "right-margin", 0, "paragraph-background", "rgba(128,128,128,0.2)", NULL);
 	gtk_text_buffer_create_tag(b, "hide", "invisible", TRUE, NULL);
 	g_object_set_data_full(G_OBJECT(v), "map", g_array_new(FALSE, FALSE, sizeof(int)), (GDestroyNotify)g_array_unref);
 	g_signal_connect(v, "button-release-event", G_CALLBACK(click), hunk);
