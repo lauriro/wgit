@@ -8,13 +8,14 @@ typedef struct {
 	int note;
 } Row;
 
+extern Entry *ent;
 extern char *base;
-extern int context;
+extern int context, nent;
 
 int git(char **out, const char *in, char **argv);
 char *parent(void);
 char *repo(const char *path);
-Entry *status(int *n);
+void status(void);
 char *diff(Entry *e, int cached);
 char *diffs(int sec, Entry *e, int n);
 char *patch(const char *d, int from, int to, int rev);

@@ -17,8 +17,7 @@ static const char *verb[] = {"Stage", "Unstage", "Revert", "Ignore"}, *ask[][2] 
 	{"Revert these lines in %s?", "_Revert"}
 };
 static const char use[] = {6, 1, 6, 4};
-static Entry *ent;
-static int nent, sec, busy, follow, sorted, hunk, part, shown = -1, shut[3];
+static int sec, busy, follow, sorted, hunk, part, shown = -1, shut[3];
 static char *cur, *text;
 
 static void set(GtkTreeIter *it, char *m, int i, const char *icon, int n)
@@ -79,14 +78,13 @@ static void top(const char *path)
 	}
 }
 
-static void reload(void)
+static void fill(void)
 {
 	GtkTreeIter it, hd, hit;
 	GtkTreePath *tp;
 	char c;
 	int i, k, n, got = 0;
 	busy = 1;
-	ent = status(&nent);
 	gtk_tree_store_clear(store);
 	for (k = 0; k < 3; k++) {
 		gtk_tree_store_append(store, &hd, 0);
@@ -110,6 +108,12 @@ static void reload(void)
 	busy = 0;
 	shown = -1;
 	sel(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
+}
+
+static void reload(void)
+{
+	status();
+	fill();
 }
 
 static void done(int r, char **o)
@@ -375,7 +379,8 @@ GtkWidget *commit_view(GtkWidget **pane)
 	gtk_paned_pack2(GTK_PANED(pane[0]), tabs(pane[1], diff_tools(dv)), TRUE, TRUE);
 	g_signal_connect(amend, "toggled", G_CALLBACK(last), 0);
 	g_signal_connect(win, "key-press-event", G_CALLBACK(key), 0);
-	reload();
+	if (!nent) status();
+	fill();
 	return pane[0];
 }
 

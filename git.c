@@ -87,12 +87,15 @@ static int by(const void *a, const void *b)
 	return strcmp(*(char **)a, *(char **)b);
 }
 
-Entry *status(int *n)
+Entry *ent;
+int nent;
+
+void status(void)
 {
 	static char *s, *d;
-	static Entry *e;
+	Entry *e = ent;
 	char *p, *q, *o;
-	int i;
+	int i, *n = &nent;
 	free(s);
 	free(d);
 	d = 0;
@@ -127,7 +130,7 @@ Entry *status(int *n)
 		}
 		qsort(e, *n, sizeof *e, by);
 	}
-	return e;
+	ent = e;
 }
 
 char *diff(Entry *e, int cached)

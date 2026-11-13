@@ -103,7 +103,7 @@ int app(const char *path, int v)
 	char *top = repo(path);
 	int k;
 	if (!top) return fputs("wgit: not a git repository\n", stderr), 1;
-	if (v < 0) status(&v), v = !v;
+	if (v < 0) status(), v = !nent;
 	setenv("NO_AT_BRIDGE", "1", 0);
 	g_set_prgname("wgit");
 	gtk_init(0, 0);

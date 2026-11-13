@@ -30,7 +30,9 @@ int main(int argc, char **argv)
 	}
 	if (argc > 1 && !strcmp(argv[1], "amend")) base = parent(), argv++, argc--;
 	if (argc > 1 && !strncmp(argv[1], "-U", 2)) context = atoi(argv[1] + 2), argv++, argc--;
-	e = status(&n);
+	status();
+	e = ent;
+	n = nent;
 	if (argc == 3 && !strcmp(argv[1], "diffs")) return fputs(diffs(atoi(argv[2]), e, n), stdout), 0;
 	for (i = 0; argc < 3 && i < n; i++) printf("%c%c %s%s%s\n", e[i].x, e[i].y, e[i].path, e[i].orig ? " < " : "", e[i].orig ? e[i].orig : "");
 	if (argc < 3) return 0;
