@@ -11,10 +11,11 @@ a Debian testing (glibc) desktop with the dwl compositor.
 GTK 3.24 is already in the desktop's stack image, so wgit uses GTK 3 only:
 no GTK 4, no libadwaita, no other libraries.
 
-- One window with two views; a `[ Log | Commit ]` switcher at the top right switches them.
+- One window with three views; a `[ Log | Commit | Stat ]` switcher at the top right switches them.
   `wgit` alone opens the commit view if `git status` lists anything, else the log view.
 - `wgit c[ommit] [path]` opens the commit view, like gitg's.
   `wgit l[og] [path]` opens the log view, gitk-like.
+  `wgit s[tat] [path]` opens the stat view: tables of authors, files and activity.
   Any unique prefix of a subcommand works.
 
 The desktop has no xdg-desktop-portal and no gsettings or dconf tools.
@@ -28,7 +29,7 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop`.
 - `git.c`, `git.h`: the plumbing, with no GTK, so it is tested without a screen.
 - `diff-view.c`, `diff-view.h`: the coloured diff view, shared by both views.
   `diff_view()` returns the text view; its parent is the scrolled window to pack.
-- `commit.c`, `log.c`: the two views. `ui.c`, `ui.h`: the window, the theme and the saved sizes.
+- `commit.c`, `log.c`, `stat.c`: the three views. `ui.c`, `ui.h`: the window, the theme and the saved sizes.
 - `wgit.c`: the subcommands. `test.c`, `test.sh`: the test binary `wgit-test` and its script.
 - `Containerfile`: the local build image `wgit-build`.
 
@@ -55,6 +56,12 @@ Why some things are as they are:
 - The graph column is empty; `paint()` draws the graph with cairo after GTK draws the rows,
   mirrored so the first column is next to the hash.
   The column is at least four cells wide, the width of two branches, so a new branch does not move the rows.
+- `stats()` in `git.c` makes the whole text of the stat view from one `git log --numstat`, so `test.sh` tests it.
+  The bars are block characters (U+2581 to U+258F); `stat.c` only gives them a colour.
+  The three range pages are text views on one buffer, so the range switcher is a plain stack switcher.
+  `stat_view()` puts its top widget in `pane[0]` only as a built mark; it has no panes to save.
+- One CSS rule removes the 100 px minimum width of the switcher buttons.
+  Without it the three view buttons do not fit over the diff of the log view.
 
 ## Build and test
 
@@ -74,7 +81,7 @@ podman build -t wgit-build .
 podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build make wgit test
 ```
 
-`make test` builds `wgit-test` and runs `test.sh`; the last line is `43 passed, 0 failed`.
+`make test` builds `wgit-test` and runs `test.sh`; the last line is `47 passed, 0 failed`.
 The test names are in `test.sh`, the commands of `wgit-test` in `test.c`.
 
 Size:
@@ -121,7 +128,7 @@ The window opens at 0,0 without decorations, 1000x700, when `~/.local/state/wgit
 Take a screenshot first and read the PNG with the Read tool to find the positions.
 `log.txt` must stay empty: a wrong property name gives a GTK warning there, not a build error.
 In the commit view, list rows are 23 px apart from y 57, the bar buttons are at y 22
-(Log and Commit at 811 and 933), and Cancel, Rescan and Commit are at 776, 861 and 950, y 676.
+(Log, Commit and Stat at 821, 892 and 964), and Cancel, Rescan and Commit are at 776, 861 and 950, y 676.
 To check the theme, add `dbus-daemon dbus-bin` to the image, run the script under `dbus-run-session --`,
 and start a small GDBus mock that owns `org.freedesktop.portal.Desktop` like tark-shell does.
 
@@ -139,7 +146,8 @@ and start a small GDBus mock that owns `org.freedesktop.portal.Desktop` like tar
 The global rules for style, commits and language apply. For this repo:
 
 - The shortest general code that does the job, no frameworks.
-  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 55,968 bytes.
+  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 60,072 bytes.
+  It is 128 bytes under the next 4096 byte step, so count the imports of a change.
 - Commit scopes are the areas: `git:`, `diff:`, `log:`, `build:`, `docs:`.
   End the message with the `Co-Authored-By` line of the model that did the work.
 - Every bug fix comes with a regression test in `test.sh`, and the failing test comes first.

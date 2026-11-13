@@ -15,7 +15,7 @@ $ make
 $ ./wgit
 ```
 
-wgit is one window with two views, and the `[ Log | Commit ]` switcher at the top right switches between them.
+wgit is one window with three views, and the `[ Log | Commit | Stat ]` switcher at the top right switches between them.
 `wgit` alone opens the commit view when the repo has changes, else the log view.
 
 `wgit commit` (or `wgit c`, any unique prefix) opens the commit view, like gitg's:
@@ -24,7 +24,8 @@ the diff of the selected file's section on the right, with a title per file,
 a message box and Cancel, Rescan and Commit buttons below.
 `wgit log` (or `wgit l`) opens the log view, like gitk:
 the graph of all branches at the left, the diff of the selected commit at the right, its details below.
-`wgit c <path>` and `wgit l <path>` work in the repo of that path.
+`wgit stat` (or `wgit s`) opens the stat view: who changed what, and when.
+`wgit c <path>`, `wgit l <path>` and `wgit s <path>` work in the repo of that path.
 
 
 ## Commit view
@@ -91,6 +92,18 @@ the graph of all branches at the left, the diff of the selected commit at the ri
   The title of the file at the top stays visible while you scroll, until the next title pushes it out.
 
 
+
+## Stat view
+
+- The `[ Last month | Last year | All ]` switcher sets the period: the last 30 days, the last 365 days, or the whole history of HEAD.
+- The first line counts the commits, the authors, the days with a commit and the added and removed lines.
+- Activity shows the commits over the period, at most 60 bars, the oldest at the left.
+  Below it, one row per weekday shows the commits per hour, in the time zone of each author.
+- Four tables list the authors, the files, the directories and the file types, the top 20 of each by commits.
+  The percent is the share of all commits in the period; the bar compares a row with the first row.
+  An author row also has the days with a commit and the date of the last commit.
+- `All` reads the whole history in one git run, so a large repo takes some time.
+
 ## Contributing
 
 The build machine needs no compiler, the build runs in Debian testing:
@@ -114,6 +127,7 @@ and `test.sh` runs it against throwaway repos.
 - `diff-view.c` shows a diff, shared with a later `wgit log`.
 - `commit.c` is the commit view.
 - `log.c` is the log view.
+- `stat.c` is the stat view; `stats()` in `git.c` makes its text.
 - `ui.c` is the window: start, colour scheme, saved layout and the switch between the views.
 - `wgit.c` picks the subcommand.
 

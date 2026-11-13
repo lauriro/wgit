@@ -6,9 +6,10 @@
 #include "ui.h"
 
 GtkWidget *win;
-static GtkWidget *stack, *page[2], *pane[4], *(*view[])(GtkWidget **) = {commit_view, log_view};
-static const char *title[] = {"Commit", "Log"};
-static int geo[] = {1000, 700, 300, 0, 450, 0};
+static GtkWidget *stack, *page[3], *pane[6], *(*view[])(GtkWidget **) = {commit_view, log_view, stat_view};
+static const char *title[] = {"Commit", "Log", "Stat"};
+static int geo[] = {1000, 700, 300, 0, 450, 0, 0, 0};
+static const char order[] = {1, 0, 2};
 static char *conf;
 
 GtkWidget *scroll(GtkWidget *w)
@@ -83,7 +84,9 @@ static void show(int v)
 
 static void switched(GtkStack *s)
 {
-	show(gtk_stack_get_visible_child(s) == page[1]);
+	int k = 0;
+	while (page[k] != gtk_stack_get_visible_child(s)) k++;
+	show(k);
 }
 
 GtkWidget *tabs(GtkWidget *w, GtkWidget *tools)
@@ -100,21 +103,25 @@ GtkWidget *tabs(GtkWidget *w, GtkWidget *tools)
 int app(const char *path, int v)
 {
 	FILE *f;
+	GtkCssProvider *css;
 	char *top = repo(path);
-	int k;
+	int i, k;
 	if (!top) return fputs("wgit: not a git repository\n", stderr), 1;
 	if (v < 0) status(), v = !nent;
 	setenv("NO_AT_BRIDGE", "1", 0);
 	g_set_prgname("wgit");
 	gtk_init(0, 0);
 	theme();
+	gtk_css_provider_load_from_data(css = gtk_css_provider_new(), "stackswitcher button { min-width: 0 }", -1, 0);
+	gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), (GtkStyleProvider *)css, GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 	if ((f = fopen(conf = g_strdup_printf("%s/wgit", g_get_user_state_dir()), "r"))) {
 		fscanf(f, "%d %d %d %d %d %d", geo, geo + 1, geo + 2, geo + 3, geo + 4, geo + 5);
 		fclose(f);
 	}
 	win = g_object_new(GTK_TYPE_WINDOW, "title", top, "default-width", geo[0], "default-height", geo[1], NULL);
 	gtk_container_add(GTK_CONTAINER(win), stack = gtk_stack_new());
-	for (k = 2; k--;) {
+	for (i = 0; i < 3; i++) {
+		k = order[i];
 		gtk_widget_show_all(page[k] = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
 		gtk_stack_add_titled(GTK_STACK(stack), page[k], title[k], title[k]);
 	}

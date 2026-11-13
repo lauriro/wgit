@@ -196,6 +196,64 @@ echo x > 'x\y.txt'
 echo x > "$(printf 'n\nl.txt')"
 check 'odd names' 5 "$("$T" diffs 2 | grep -c '^@@')"
 
+# ---- Stat ----
+
+mkdir ../stat && cd ../stat && git init -q && git config user.name t && git config user.email t@t
+NOW=$(date -ud 2026-01-31T12:00 +%s)
+
+by() {
+	git add . && GIT_AUTHOR_DATE="$2 +0000" GIT_COMMITTER_DATE="$2 +0000" git commit -q --author="$1 <$1@t>" -m "$1 $2"
+}
+
+stat() {
+	TZ=UTC "$T" stat "$@" "$NOW" | sed 's/ *$//'
+}
+
+echo 1 > old.txt
+by Ann 2025-06-01T10:00:00
+echo all: > Makefile
+by Bob 2026-01-10T09:00:00
+mkdir src && seq 3 > src/a.c && seq 2 > b.txt
+by Ann 2026-01-30T09:00:00
+sed -i 's/^2$/two/' src/a.c
+by Ann 2026-01-30T15:00:00
+check 'stat last month' "$(cat <<'EOF'
+Commits 3, authors 2, active days 2, lines +7 -1
+
+Activity, 1 day per bar
+        ▄                   █
+
+     00    06    12    18
+Mon
+Tue
+Wed
+Thu
+Fri           █     █
+Sat           █
+Sun
+
+commits      %                  +       -  days  last        Authors (2)
+      2  66.7% ██████████       6       1     1  2026-01-30  Ann
+      1  33.3% █████            1       0     1  2026-01-10  Bob
+
+commits      %                  +       -  Files (3)
+      2  66.7% ██████████       4       1  src/a.c
+      1  33.3% █████            1       0  Makefile
+      1  33.3% █████            2       0  b.txt
+
+commits      %                  +       -  Directories (1)
+      2  66.7% ██████████       4       1  src
+
+commits      %                  +       -  File types (3)
+      2  66.7% ██████████       4       1  c
+      1  33.3% █████            1       0  Makefile
+      1  33.3% █████            2       0  txt
+EOF
+)" "$(stat 30)"
+check 'stat last year' "$(printf '%s\n' 'Commits 4, authors 2, active days 3, lines +8 -1' '' 'Activity, 7 days per bar' '                  ▄                              ▄  █')" "$(stat 365 | head -4)"
+check 'stat all' "$(printf '%s\n' 'Activity, 5 days per bar' '▄                                           ▄   █')" "$(stat 0 | sed -n 3,4p)"
+check 'stat empty' 'Commits 0, authors 0, active days 0, lines +0 -0' "$("$T" stat 1 $((NOW + 864000)))"
+
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
 

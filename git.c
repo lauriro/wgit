@@ -1,11 +1,13 @@
 
 #define _GNU_SOURCE
 #include <fcntl.h>
+#include <search.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 #include "git.h"
 
@@ -353,5 +355,134 @@ char *repo(const char *path)
 	if ((path && chdir(path)) || git(&top, 0, (char *[]){"git", "rev-parse", "--show-toplevel", 0})) return 0;
 	top[strcspn(top, "\n")] = 0;
 	return chdir(top) ? 0 : top;
+}
+
+typedef struct {
+	char *key, last[11];
+	long n, add, del, days;
+	int at;
+} Stat;
+
+typedef struct {
+	void *root;
+	Stat **v;
+	int n;
+} Tab;
+
+static Stat *get(Tab *t, char *key)
+{
+	void **f = tsearch(&key, &t->root, by);
+	Stat *s = *f;
+	if (s == (void *)&key) {
+		size_t n = strlen(key) + 1;
+		*f = s = malloc(sizeof *s + n);
+		*s = (Stat){memcpy(s + 1, key, n)};
+		t->v = realloc(t->v, ++t->n * sizeof *t->v);
+		t->v[t->n - 1] = s;
+	}
+	return s;
+}
+
+static void bump(Tab *t, char *key, int at, long add, long del)
+{
+	Stat *s = get(t, key);
+	if (s->at != at) s->at = at, s->n++;
+	s->add += add;
+	s->del += del;
+}
+
+static int rank(const void *a, const void *b)
+{
+	Stat *s = *(Stat **)a, *t = *(Stat **)b;
+	return s->n < t->n ? 1 : s->n > t->n ? -1 : strcmp(s->key, t->key);
+}
+
+static void spark(FILE *f, long *v, int n, long max)
+{
+	for (; n--; v++) *v ? fprintf(f, "\xe2\x96%c", (int)(0x81 + *v * 7 / max)) : fputc(' ', f);
+	fputc('\n', f);
+}
+
+char *stats(int days, long now)
+{
+	static const char title[][12] = {"Authors", "Files", "Directories", "File types"};
+	Tab t[6] = {{0}}, *u;
+	Stat *a = 0, *r;
+	char *s, *o, *p, *q, *e, *d, *c, since[32];
+	time_t n = now;
+	long *day = 0, act[60] = {0}, grid[7][24] = {{0}}, add = 0, del = 0, x, y, max = 1, top = 1;
+	long off = localtime(&n)->tm_gmtoff, today = (now + off) / 86400, old = today;
+	int i, k, w, nc = 0, span, step, nb;
+	size_t len;
+	FILE *f = open_memstream(&o, &len);
+	snprintf(since, sizeof since, "--since=%ld", (today - days + 1) * 86400 - off);
+	if (git(&s, 0, (char *[]){"git", "log", "--numstat", "--no-renames", "--format=%x01%at %ad%x1f%aN",
+		"--date=format:%z %u %H %Y-%m-%d", days ? since : 0, 0})) *s = 0;
+	for (p = s; *p; p = e) {
+		e = p + strcspn(p, "\n");
+		if (*e) *e++ = 0;
+		if (*p == 1) {
+			day = realloc(day, (nc + 1) * sizeof *day);
+			x = strtol(p + 1, &q, 10);
+			y = strtol(q, &q, 10);
+			if ((day[nc++] = (x + (y / 100 * 60 + y % 100) * 60) / 86400) < old) old = day[nc - 1];
+			w = strtol(q, &q, 10) - 1;
+			if (++grid[w][strtol(q, &q, 10)] > top) top++;
+			d = q + 1;
+			a = get(t, d + 11);
+			if (!a->n++) memcpy(a->last, d, 10);
+			if (!get(t + 4, d)->n++) a->days++;
+			d[10] = 0;
+			get(t + 5, d);
+		} else if (a && (q = strchr(p, '\t')) && (d = strchr(q + 1, '\t'))) {
+			add += x = strtol(p, 0, 10);
+			del += y = strtol(q + 1, 0, 10);
+			a->add += x;
+			a->del += y;
+			bump(t + 1, ++d, nc, x, y);
+			for (q = 0, c = p = d; *p; p++) if (*p == '/') q = p, c = p + 1; else if (*p == '.') c = p + 1;
+			bump(t + 3, c, nc, x, y);
+			if (q) {
+				*q = 0;
+				bump(t + 2, d, nc, x, y);
+			}
+		}
+	}
+	fprintf(f, "Commits %d, authors %d, active days %d, lines +%ld -%ld\n", nc, t->n, t[5].n, add, del);
+	span = days ? days : today - old + 1;
+	step = (span + 59) / 60;
+	nb = (span + step - 1) / step;
+	for (i = 0; i < nc; i++) {
+		k = (today - day[i]) / step;
+		if (++act[nb - 1 - (k < 0 ? 0 : k < nb ? k : nb - 1)] > max) max++;
+	}
+	if (nc) {
+		fprintf(f, "\nActivity, %d day%s per bar\n", step, &"s"[step < 2]);
+		spark(f, act, nb, max);
+		fputs("\n     00    06    12    18\n", f);
+		for (w = 0; w < 7; w++) {
+			fprintf(f, "%.3s  ", &"MonTueWedThuFriSatSun"[3 * w]);
+			spark(f, grid[w], 24, top);
+		}
+	}
+	for (u = t; u < t + 6; u++) {
+		qsort(u->v, u->n, sizeof *u->v, rank);
+		w = u < t + 4 && u->n;
+		if (w) fprintf(f, "\ncommits      %%                  +       -  %s%s (%d)\n", u == t ? "days  last        " : "", title[u - t], u->n);
+		for (i = 0; w && i < u->n && i < 20; i++) {
+			r = u->v[i];
+			fprintf(f, "%7ld %5.1f%% ", r->n, 100. * r->n / nc);
+			for (k = 0, x = r->n * 80 / u->v[0]->n; k < 10; k++, x -= 8) x > 0 ? fprintf(f, "\xe2\x96%c", (int)(x < 8 ? 0x90 - x : 0x88)) : fputc(' ', f);
+			fprintf(f, " %7ld %7ld  ", r->add, r->del);
+			if (u == t) fprintf(f, "%4ld  %s  ", r->days, r->last);
+			fprintf(f, "%s\n", r->key);
+		}
+		tdestroy(u->root, free);
+		free(u->v);
+	}
+	free(day);
+	free(s);
+	fclose(f);
+	return o;
 }
 
