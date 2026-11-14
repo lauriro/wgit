@@ -42,9 +42,12 @@ the graph of all branches at the left, the diff of the selected commit at the ri
   Change a line to a pattern if you like.
   Sort .gitignore sorts each block of lines between empty lines.
 - Double-click a file to stage or unstage it.
-- Click a section title to collapse or open the section.
-- Right-click a section title for Stage all, Unstage all, Revert all, Delete all or Ignore all.
-  The section opens and all its files are selected first, so you see what changes.
+- Files are shown under their folders. A chain of folders with one child is one row, like `src/ui/`.
+- The colour of a name tells its state: added is green, deleted is red, modified and untracked are plain.
+  Any other state shows its letter after the name.
+- Click a section title or a folder to collapse or open it.
+- Right-click a section title or a folder for Stage all, Unstage all, Revert all, Delete all or Ignore all.
+  It acts on all files below it, also those in closed folders.
 - Click a hunk header (`@@ ...`) to stage or unstage that hunk.
 - Right-click the diff for more:
   Stage or Unstage hunk (the hunk under the pointer),

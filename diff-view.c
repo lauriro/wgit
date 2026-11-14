@@ -234,7 +234,7 @@ static gboolean used(void)
 
 static void all(GtkWidget *c, gpointer hide)
 {
-	diff_fold(g_object_get_data(G_OBJECT(c), "view"), GPOINTER_TO_INT(hide));
+	diff_fold(g_object_get_data(G_OBJECT(c), "view"), "", 0, GPOINTER_TO_INT(hide));
 }
 
 GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
@@ -351,14 +351,20 @@ void diff_files(GtkWidget *view, const char *text)
 	}
 }
 
-void diff_fold(GtkWidget *view, int hide)
+void diff_fold(GtkWidget *view, const char *dir, int len, int hide)
 {
 	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(view));
-	GtkTextIter it;
+	GtkTextIter it, e;
+	char *t, *p;
 	int l, n = gtk_text_buffer_get_line_count(b);
 	for (l = 0; l < n; l++) {
 		gtk_text_buffer_get_iter_at_line(b, &it, l);
-		if (gtk_text_iter_has_tag(&it, tag(b, "title"))) fold(GTK_TEXT_VIEW(view), l, hide);
+		if (!gtk_text_iter_has_tag(&it, tag(b, "title"))) continue;
+		e = it;
+		gtk_text_iter_forward_to_line_end(&e);
+		t = gtk_text_buffer_get_text(b, &it, &e, TRUE);
+		if ((p = strchr(t, ' ')) && !strncmp(p + 1, dir, len)) fold(GTK_TEXT_VIEW(view), l, hide);
+		g_free(t);
 	}
 }
 
