@@ -11,6 +11,10 @@ typedef void Top(const char *path);
 /* A file list row has this much space above its arrow and text and below its text. */
 #define PAD 3
 
+/* A sixth of an em after the added count keeps it apart from the removed count. */
+#define ADD "+%d\u2006"
+#define DEL "-%d"
+
 static int at = -1, one = -1;
 static char *font;
 static const char *tags[][2] = {
@@ -107,7 +111,7 @@ static void moved(GtkAdjustment *a, GtkTextView *v)
 	e = it;
 	gtk_text_iter_forward_to_line_end(&e);
 	s = gtk_text_buffer_get_text(b, &it, &e, TRUE);
-	if ((p = g_strrstr(s, "  +"))) {
+	if ((p = g_strrstr(s, "  "))) {
 		*p = 0;
 		((Top *)g_object_get_data(G_OBJECT(v), "top"))(s + 1);
 	}
@@ -159,10 +163,9 @@ static gboolean stick(GtkTextView *v, cairo_t *cr)
 	e = it;
 	gtk_text_iter_forward_to_line_end(&e);
 	s = gtk_text_buffer_get_text(gtk_text_view_get_buffer(v), &it, &e, TRUE);
-	if ((p = g_strrstr(s, "  +")) && (q = strstr(p, " −"))) {
-		*p = *q = 0;
-		m = g_markup_printf_escaped("<span font=\"%s\" weight=\"bold\">%s  <span foreground=\"#2a2\">%s</span> <span foreground=\"#d33\">%s</span></span>", font, s, p + 2, q + 1);
-	} else m = g_markup_printf_escaped("<span font=\"%s\" weight=\"bold\">%s</span>", font, s);
+	*(p = g_strrstr(s, "  ")) = 0;
+	if ((q = strchr(p += 2, '-'))) *q++ = 0;
+	m = g_markup_printf_escaped("<span font=\"%s\"><b>%s</b>  <span foreground=\"#2a2\">%s</span><span foreground=\"#d33\">%s%s</span></span>", font, s, p, q ? "-" : "", q ? q : "");
 	pango_layout_set_markup(l = gtk_widget_create_pango_layout(GTK_WIDGET(v), 0), m, -1);
 	pango_layout_get_pixel_size(l, 0, &lh);
 	y += h - PAD - lh;
@@ -227,7 +230,8 @@ GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 	int i;
 	for (i = 0; i < 4; i++) gtk_text_buffer_create_tag(b, tags[i][0], "foreground", tags[i][1], NULL);
 	if (!font) g_object_get(gtk_settings_get_default(), "gtk-font-name", &font, NULL);
-	gtk_text_buffer_create_tag(b, "title", "font", font, "weight", PANGO_WEIGHT_BOLD, "pixels-below-lines", PAD, "left-margin", 0, "right-margin", 0, "paragraph-background", "rgba(128,128,128,0.2)", NULL);
+	gtk_text_buffer_create_tag(b, "title", "font", font, "pixels-below-lines", PAD, "left-margin", 0, "right-margin", 0, "paragraph-background", "rgba(128,128,128,0.2)", NULL);
+	gtk_text_buffer_create_tag(b, "bold", "weight", PANGO_WEIGHT_BOLD, NULL);
 	gtk_text_buffer_create_tag(b, "hide", "invisible", TRUE, NULL);
 	g_object_set_data(G_OBJECT(v), "map", g_array_new(FALSE, FALSE, sizeof(int)));
 	g_signal_connect(v, "button-release-event", G_CALLBACK(click), hunk);
@@ -251,25 +255,32 @@ GtkWidget *diff_tools(GtkWidget *view)
 		g_object_set_data(G_OBJECT(c), "view", view);
 		g_signal_connect(c, "clicked", G_CALLBACK(all), GINT_TO_POINTER(k));
 	}
-	gtk_box_pack_start(GTK_BOX(b), c = g_object_new(GTK_TYPE_LABEL, "ellipsize", PANGO_ELLIPSIZE_END, "xalign", 0., NULL), TRUE, TRUE, 6);
+	gtk_box_pack_start(GTK_BOX(b), c = g_object_new(GTK_TYPE_LABEL, "ellipsize", PANGO_ELLIPSIZE_END, "xalign", 0., "use-markup", TRUE, NULL), TRUE, TRUE, 6);
 	g_object_set_data(G_OBJECT(view), "sum", c);
 	return b;
+}
+
+static const char *num(char *s, const char *fmt, int n)
+{
+	*s = 0;
+	if (n) snprintf(s, 16, fmt, n);
+	return s;
 }
 
 static void title(GtkTextView *v, GArray *map, GtkTextMark *m, int at, const char *name, int len, int a, int d)
 {
 	GtkTextBuffer *b = gtk_text_view_get_buffer(v);
 	GtkTextIter it, st;
-	char s[32];
+	char s[16];
 	gtk_text_buffer_get_iter_at_mark(b, &it, m);
 	g_array_insert_val(map, gtk_text_iter_get_line(&it), at);
 	arrow(v, &it, 0);
 	gtk_text_buffer_insert(b, &it, " ", -1);
-	gtk_text_buffer_insert(b, &it, name, len);
-	snprintf(s, sizeof s, "  +%d", a);
-	gtk_text_buffer_insert_with_tags_by_name(b, &it, s, -1, "+", NULL);
-	snprintf(s, sizeof s, " −%d\n", d);
-	gtk_text_buffer_insert_with_tags_by_name(b, &it, s, -1, "-", NULL);
+	gtk_text_buffer_insert_with_tags_by_name(b, &it, name, len, "bold", NULL);
+	gtk_text_buffer_insert(b, &it, "  ", -1);
+	gtk_text_buffer_insert_with_tags_by_name(b, &it, num(s, ADD, a), -1, "+", NULL);
+	gtk_text_buffer_insert_with_tags_by_name(b, &it, num(s, DEL, d), -1, "-", NULL);
+	gtk_text_buffer_insert(b, &it, "\n", -1);
 	gtk_text_buffer_get_iter_at_mark(b, &st, m);
 	gtk_text_buffer_apply_tag(b, tag(b, "title"), &st, &it);
 	gtk_text_buffer_delete_mark(b, m);
@@ -284,7 +295,7 @@ void diff_files(GtkWidget *view, const char *text)
 	GtkTextMark *m = 0;
 	GtkTextIter it;
 	const char *p, *e, *n, *name = 0;
-	char *t = g_utf8_make_valid(text ? text : "", -1), s[2] = "";
+	char *t = g_utf8_make_valid(text ? text : "", -1), s[2] = "", x[16], y[16];
 	int files = 0, hdr = 0, len = 0, a = 0, d = 0, add = 0, del = 0, top = 0, l, k;
 	gtk_text_buffer_set_text(b, "", 0);
 	gtk_text_buffer_get_end_iter(b, &it);
@@ -316,8 +327,8 @@ void diff_files(GtkWidget *view, const char *text)
 	if (m) title(tv, map, m, top, name, len, a, d);
 	g_free(t);
 	if (sum) {
-		t = g_strdup_printf("%d file%s, +%d −%d", files, files == 1 ? "" : "s", add, del);
-		gtk_label_set_text(GTK_LABEL(sum), t);
+		t = g_strdup_printf("%d file%s  <span foreground=\"%s\">%s</span><span foreground=\"%s\">%s</span>", files, files == 1 ? "" : "s", tags[2][1], num(x, ADD, add), tags[3][1], num(y, DEL, del));
+		g_object_set(sum, "label", t, NULL);
 		g_free(t);
 	}
 }
@@ -346,7 +357,7 @@ void diff_goto(GtkWidget *view, const char *path)
 		e = it;
 		gtk_text_iter_forward_to_line_end(&e);
 		t = gtk_text_buffer_get_text(b, &it, &e, TRUE);
-		hit = (p = strchr(t, ' ')) && !strncmp(p + 1, path, k) && !strncmp(p + 1 + k, "  +", 3);
+		hit = (p = strchr(t, ' ')) && !strncmp(p + 1, path, k) && g_strrstr(t, "  ") == p + 1 + k;
 		g_free(t);
 		if (!hit) continue;
 		fold(GTK_TEXT_VIEW(view), l, 0);
