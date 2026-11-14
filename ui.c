@@ -89,11 +89,21 @@ static void switched(GtkStack *s)
 	show(k);
 }
 
+/* The view's tools on the left, the views and a × on the right.
+ * The window has no title bar under dwl: the × is its close, through delete-event, so the sizes are saved.
+ * Its look is the desktop theme's .close, a plain flat button elsewhere; a click leaves the focus where it was,
+ * so no focus ring is left around it */
 GtkWidget *tabs(GtkWidget *w, GtkWidget *tools)
 {
-	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0), *h = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), *s = g_object_new(GTK_TYPE_STACK_SWITCHER, "stack", stack, NULL);
+	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0), *h = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), *s = g_object_new(GTK_TYPE_STACK_SWITCHER, "stack", stack, NULL),
+		*x = g_object_new(GTK_TYPE_BUTTON, "image", gtk_image_new_from_icon_name("window-close-symbolic", GTK_ICON_SIZE_MENU), "valign", GTK_ALIGN_CENTER, "focus-on-click", FALSE, NULL);
+	GtkStyleContext *c = gtk_widget_get_style_context(x);
+	gtk_style_context_add_class(c, "close");
+	gtk_style_context_add_class(c, "flat");
+	g_signal_connect_swapped(x, "clicked", G_CALLBACK(gtk_window_close), win);
 	gtk_container_set_border_width(GTK_CONTAINER(h), 6);
 	gtk_box_pack_start(GTK_BOX(h), tools, FALSE, FALSE, 0);
+	gtk_box_pack_end(GTK_BOX(h), x, FALSE, FALSE, 0);
 	gtk_box_pack_end(GTK_BOX(h), s, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), h, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), w, TRUE, TRUE, 0);
