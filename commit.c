@@ -351,8 +351,8 @@ GtkWidget *commit_view(GtkWidget **pane)
 		reload();
 		return pane[0];
 	}
-	pane[0] = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
-	pane[1] = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
+	pane[0] = split(GTK_ORIENTATION_HORIZONTAL);
+	pane[1] = split(GTK_ORIENTATION_VERTICAL);
 	l = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store = gtk_tree_store_new(4, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING, G_TYPE_INT)));
 	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, g_object_new(GTK_TYPE_CELL_RENDERER_PIXBUF, "width", 20, "xalign", 1., NULL), "icon-name", 2, "sensitive", 3, NULL);

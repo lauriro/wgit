@@ -19,6 +19,12 @@ GtkWidget *scroll(GtkWidget *w)
 	return s;
 }
 
+/* A wide handle: the usual line of 1 px is hard to grab */
+GtkWidget *split(int orientation)
+{
+	return g_object_new(GTK_TYPE_PANED, "orientation", orientation, "wide-handle", TRUE, NULL);
+}
+
 static gboolean quit(GtkWidget *w)
 {
 	FILE *f;
