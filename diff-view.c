@@ -219,6 +219,14 @@ static void popup(GtkTextView *w, GtkWidget *m, Menu *menu)
 	if (GTK_IS_MENU(m)) menu(GTK_MENU(m), map(GTK_WIDGET(w), at));
 }
 
+/* GTK measures a new text bit by bit, and a scroll cannot pass the height measured so far,
+ * so the scroll to a file is done again each time the height changes. */
+static void grown(GtkAdjustment *a, GtkTextView *v)
+{
+	GtkTextMark *g = gtk_text_buffer_get_mark(gtk_text_view_get_buffer(v), "goto");
+	if (g && jump) gtk_text_view_scroll_to_mark(v, g, 0, TRUE, 0, 0);
+}
+
 static gboolean used(void)
 {
 	return jump = 0;
@@ -249,6 +257,7 @@ GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 		g_object_set_data(G_OBJECT(v), "top", top);
 		g_signal_connect(v, "motion-notify-event", G_CALLBACK(used), 0);
 		g_signal_connect(v, "scroll-event", G_CALLBACK(used), 0);
+		g_signal_connect(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(s)), "changed", G_CALLBACK(grown), v);
 		g_signal_connect(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(s)), "value-changed", G_CALLBACK(moved), v);
 	}
 	return v;
