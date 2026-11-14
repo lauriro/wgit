@@ -80,10 +80,12 @@ static void top(const char *path)
 
 static void fill(void)
 {
-	GtkTreeIter it, hd, hit;
+	/* With no file to keep, the first unstaged file opens, as the next step is to stage; else staged, else untracked */
+	static const char rank[] = {1, 0, 2};
+	GtkTreeIter it, hd, hit, alt;
 	GtkTreePath *tp;
 	char c;
-	int i, k, n, got = 0;
+	int i, k, n, got = 0, best = 3;
 	busy = 1;
 	gtk_tree_store_clear(store);
 	for (k = 0; k < 3; k++) {
@@ -94,6 +96,7 @@ static void fill(void)
 			gtk_tree_store_append(store, &it, &hd);
 			set(&it, g_markup_printf_escaped("%c  %s", c, ent[i].path), i, 0, 0);
 			if (!shut[k] && cur && !strcmp(cur, ent[i].path) && (!got || !k == !sec)) hit = it, got = 1;
+			if (!shut[k] && n == 1 && rank[k] < best) alt = it, best = rank[k];
 		}
 		/* The count grey, not half transparent: a markup alpha leaked into the diff's text, which drew at half
 		 * strength once it had the focus, until the pointer left the window */
@@ -102,8 +105,8 @@ static void fill(void)
 		if (!shut[k]) gtk_tree_view_expand_row(GTK_TREE_VIEW(list), tp, FALSE);
 		gtk_tree_path_free(tp);
 	}
-	if (got) {
-		tp = gtk_tree_model_get_path(GTK_TREE_MODEL(store), &hit);
+	if (got || best < 3) {
+		tp = gtk_tree_model_get_path(GTK_TREE_MODEL(store), got ? &hit : &alt);
 		gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), tp, 0, FALSE);
 		gtk_tree_path_free(tp);
 	}
