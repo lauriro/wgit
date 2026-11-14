@@ -95,7 +95,9 @@ static void fill(void)
 			set(&it, g_markup_printf_escaped("%c  %s", c, ent[i].path), i, 0, 0);
 			if (!shut[k] && cur && !strcmp(cur, ent[i].path) && (!got || !k == !sec)) hit = it, got = 1;
 		}
-		set(&hd, g_strdup_printf("<b>%s</b>  <span alpha=\"50%%\">%d</span>", head[k], n), 0, arrow[n && shut[k]], n);
+		/* The count grey, not half transparent: a markup alpha leaked into the diff's text, which drew at half
+		 * strength once it had the focus, until the pointer left the window */
+		set(&hd, g_strdup_printf("<b>%s</b>  <span foreground=\"#888\">%d</span>", head[k], n), 0, arrow[n && shut[k]], n);
 		tp = gtk_tree_model_get_path(GTK_TREE_MODEL(store), &hd);
 		if (!shut[k]) gtk_tree_view_expand_row(GTK_TREE_VIEW(list), tp, FALSE);
 		gtk_tree_path_free(tp);
