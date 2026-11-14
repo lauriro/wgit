@@ -17,7 +17,7 @@ static const char *verb[] = {"Stage", "Unstage", "Revert", "Ignore"}, *ask[][2] 
 	{"Revert these lines in %s?", "_Revert"}
 };
 static const char use[] = {6, 1, 6, 4};
-static int sec, busy, follow, sorted, hunk, part, shown = -1, shut[3];
+static int sec, row, busy, follow, sorted, hunk, part, shown = -1, shut[3];
 static char *cur, *text;
 
 static void set(GtkTreeIter *it, char *m, int i, const char *icon, int n)
@@ -47,6 +47,7 @@ static void sel(GtkTreeSelection *s)
 		gtk_tree_model_get(m, &it, 1, &k, -1);
 		cur = g_strdup(ent[k].path);
 		sec = *gtk_tree_path_get_indices(p);
+		row = gtk_tree_path_get_indices(l->data)[1];
 	}
 	if (!l || sec != shown) {
 		free(text);
@@ -80,7 +81,8 @@ static void top(const char *path)
 
 static void fill(void)
 {
-	/* With no file to keep, the first unstaged file opens, as the next step is to stage; else staged, else untracked */
+	/* The selection stays in its section: on the same file, or on the file now at its row when that file left.
+	 * With no file to keep, the first unstaged file opens, as the next step is to stage; else staged, else untracked */
 	static const char rank[] = {1, 0, 2};
 	GtkTreeIter it, hd, hit, alt;
 	GtkTreePath *tp;
@@ -95,7 +97,10 @@ static void fill(void)
 			n++;
 			gtk_tree_store_append(store, &it, &hd);
 			set(&it, g_markup_printf_escaped("%c  %s", c, ent[i].path), i, 0, 0);
-			if (!shut[k] && cur && !strcmp(cur, ent[i].path) && (!got || !k == !sec)) hit = it, got = 1;
+			if (!shut[k] && cur && k == sec && got < 2) {
+				if (!strcmp(cur, ent[i].path)) hit = it, got = 2;
+				else if (n <= row + 1) hit = it, got = 1;
+			}
 			if (!shut[k] && n == 1 && rank[k] < best) alt = it, best = rank[k];
 		}
 		/* The count grey, not half transparent: a markup alpha leaked into the diff's text, which drew at half
