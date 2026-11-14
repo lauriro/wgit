@@ -15,7 +15,9 @@ typedef void Top(const char *path);
 #define ADD "+%d\u2006"
 #define DEL "-%d"
 
-static int at = -1, one = -1;
+/* GTK scrolls to a file in steps. From diff_goto() until the pointer is used on the diff, a scroll is not the user's,
+ * so it must not move the selection in the file list. */
+static int at = -1, one = -1, jump;
 static char *font;
 static const char *tags[][2] = {
 	{"head", "#57c"},
@@ -98,7 +100,7 @@ static void moved(GtkAdjustment *a, GtkTextView *v)
 	GdkRectangle r;
 	char *s, *p;
 	int y, end, h;
-	if (!g) return;
+	if (!g || jump) return;
 	gtk_text_view_get_visible_rect(v, &r);
 	gtk_text_buffer_get_iter_at_mark(b, &it, g);
 	gtk_text_view_get_line_yrange(v, &it, &y, &h);
@@ -217,6 +219,11 @@ static void popup(GtkTextView *w, GtkWidget *m, Menu *menu)
 	if (GTK_IS_MENU(m)) menu(GTK_MENU(m), map(GTK_WIDGET(w), at));
 }
 
+static gboolean used(void)
+{
+	return jump = 0;
+}
+
 static void all(GtkWidget *c, gpointer hide)
 {
 	diff_fold(g_object_get_data(G_OBJECT(c), "view"), GPOINTER_TO_INT(hide));
@@ -240,6 +247,8 @@ GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 	if (menu) g_signal_connect(v, "populate-popup", G_CALLBACK(popup), menu);
 	if (top) {
 		g_object_set_data(G_OBJECT(v), "top", top);
+		g_signal_connect(v, "motion-notify-event", G_CALLBACK(used), 0);
+		g_signal_connect(v, "scroll-event", G_CALLBACK(used), 0);
 		g_signal_connect(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(s)), "value-changed", G_CALLBACK(moved), v);
 	}
 	return v;
@@ -364,6 +373,7 @@ void diff_goto(GtkWidget *view, const char *path)
 		gtk_text_buffer_get_iter_at_line(b, &it, l);
 		if ((g = gtk_text_buffer_get_mark(b, "goto"))) gtk_text_buffer_move_mark(b, g, &it);
 		else g = gtk_text_buffer_create_mark(b, "goto", &it, TRUE);
+		jump = 1;
 		gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(view), g, 0, TRUE, 0, 0);
 		return;
 	}
