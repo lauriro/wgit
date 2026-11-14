@@ -25,6 +25,28 @@ GtkWidget *split(int orientation)
 	return g_object_new(GTK_TYPE_PANED, "orientation", orientation, "wide-handle", TRUE, NULL);
 }
 
+static void arrow(GtkTreeView *v, GtkTreeIter *it, GtkTreePath *p, gpointer shut)
+{
+	gtk_tree_store_set(GTK_TREE_STORE(gtk_tree_view_get_model(v)), it, 2, shut ? "pan-end-symbolic" : "pan-down-symbolic", -1);
+}
+
+/* A tree with the arrows of the diff titles. Column 0 of the store is the markup, 2 the icon name, 3 if the icon
+ * is active. The arrow and the name are in one column, so the name follows the indentation of its level */
+GtkWidget *tree(GtkTreeModel *m)
+{
+	GtkWidget *v = g_object_new(GTK_TYPE_TREE_VIEW, "model", m, "headers-visible", FALSE, "show-expanders", FALSE, "level-indentation", 16, NULL);
+	GtkTreeViewColumn *col = gtk_tree_view_column_new();
+	GtkCellRenderer *r = g_object_new(GTK_TYPE_CELL_RENDERER_PIXBUF, "width", 20, "xpad", 4, "xalign", 0., NULL);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(v), col);
+	gtk_tree_view_column_pack_start(col, r, FALSE);
+	gtk_tree_view_column_set_attributes(col, r, "icon-name", 2, "sensitive", 3, NULL);
+	gtk_tree_view_column_pack_start(col, r = gtk_cell_renderer_text_new(), TRUE);
+	gtk_tree_view_column_set_attributes(col, r, "markup", 0, NULL);
+	g_signal_connect(v, "row-collapsed", G_CALLBACK(arrow), GINT_TO_POINTER(1));
+	g_signal_connect(v, "row-expanded", G_CALLBACK(arrow), 0);
+	return v;
+}
+
 static gboolean quit(GtkWidget *w)
 {
 	FILE *f;

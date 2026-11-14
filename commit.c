@@ -306,7 +306,6 @@ static void fold(GtkTreeView *v, GtkTreeIter *it, GtkTreePath *p, gpointer c)
 		gtk_tree_path_free(tp);
 	}
 	g_free(key);
-	gtk_tree_store_set(store, it, 2, arrow[!!c], -1);
 }
 
 static void all(GtkWidget *w, gpointer k)
@@ -316,8 +315,8 @@ static void all(GtkWidget *w, gpointer k)
 	for (i = 0; i < nent; i++) if (has(part, i) && !strncmp(ent[i].path, spot + 3, len)) e[n++] = ent + i;
 	go(e, n, GPOINTER_TO_INT(k), part);
 }
-/* A file has the menu of its section without "all": it acts on the selected files, as the buttons do */
 
+/* A file has the menu of its section without "all": it acts on the selected files, as the buttons do */
 static void heads(GtkTreePath *p, GdkEventButton *ev)
 {
 	static const char *name[] = {"Stage all", "Unstage all", "Revert all", "Ignore all", "Delete all"};
@@ -438,8 +437,6 @@ GtkWidget *commit_view(GtkWidget **pane)
 	static const char *end[] = {"Commit", "Rescan"};
 	GCallback fn[] = {G_CALLBACK(submit), G_CALLBACK(reload)};
 	GtkWidget *l, *r, *b, *m, *c;
-	GtkTreeViewColumn *col;
-	GtkCellRenderer *name;
 	GtkTreeSelection *s;
 	int k;
 	if (pane[0]) {
@@ -449,15 +446,8 @@ GtkWidget *commit_view(GtkWidget **pane)
 	pane[0] = split(GTK_ORIENTATION_HORIZONTAL);
 	pane[1] = split(GTK_ORIENTATION_VERTICAL);
 	l = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-	list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store = gtk_tree_store_new(5, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING)));
+	list = tree(GTK_TREE_MODEL(store = gtk_tree_store_new(5, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING)));
 	shut = g_strdup("");
-	/* The arrow and the name in one column, so the name follows the indentation of its level */
-	gtk_tree_view_append_column(GTK_TREE_VIEW(list), col = gtk_tree_view_column_new());
-	gtk_tree_view_column_pack_start(col, name = g_object_new(GTK_TYPE_CELL_RENDERER_PIXBUF, "width", 20, "xpad", 4, "xalign", 0., NULL), FALSE);
-	gtk_tree_view_column_set_attributes(col, name, "icon-name", 2, "sensitive", 3, NULL);
-	gtk_tree_view_column_pack_start(col, name = gtk_cell_renderer_text_new(), TRUE);
-	gtk_tree_view_column_set_attributes(col, name, "markup", 0, NULL);
-	g_object_set(list, "headers-visible", FALSE, "show-expanders", FALSE, "level-indentation", 16, NULL);
 	s = gtk_tree_view_get_selection(GTK_TREE_VIEW(list));
 	g_object_set(s, "mode", GTK_SELECTION_MULTIPLE, NULL);
 	gtk_tree_selection_set_select_function(s, (GtkTreeSelectionFunc)can, 0, 0);

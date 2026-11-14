@@ -27,15 +27,39 @@ static void load(void)
 	g_free(s);
 }
 
+static void set(GtkTreeStore *st, GtkTreeIter *it, char *m, const char *path, const char *icon)
+{
+	gtk_tree_store_set(st, it, 0, m, 1, path, 2, icon, 3, 1, -1);
+	g_free(m);
+}
+
+static void act(GtkTreeView *v, GtkTreePath *p)
+{
+	if (!gtk_tree_view_collapse_row(v, p)) gtk_tree_view_expand_row(v, p, FALSE);
+}
+
+/* A click on the arrow of a folder closes or opens it; a click on its name selects it */
+static gboolean press(GtkTreeView *v, GdkEventButton *ev)
+{
+	GtkTreePath *p;
+	int x, r = 0;
+	if (ev->type == GDK_BUTTON_PRESS && gtk_tree_view_get_path_at_pos(v, ev->x, ev->y, &p, 0, &x, 0)) {
+		r = x < 16 * gtk_tree_path_get_depth(p) + 4 && (gtk_tree_view_collapse_row(v, p) || gtk_tree_view_expand_row(v, p, FALSE));
+		gtk_tree_path_free(p);
+	}
+	return r;
+}
+
 GtkWidget *stat_view(GtkWidget **pane)
 {
+	static const char count[] = "%s  <span foreground=\"#888\">%d</span>";
 	GtkWidget *v, *l;
 	GtkTreeStore *st;
 	GtkTreeIter it, par[64];
 	GtkTreePath *tp;
-	char *o, *p, *e, *q, c;
+	char *o, *p, *e, *q, *s, c;
 	const char *prev = "";
-	int k, d = 0, len[64] = {0};
+	int k, m, n = 0, d = 0, len[64] = {0};
 	if (!pane[0]) {
 		stack = gtk_stack_new();
 		for (k = 0; k < 3; k++) {
@@ -44,33 +68,36 @@ GtkWidget *stat_view(GtkWidget **pane)
 			buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(v));
 			gtk_stack_add_titled(GTK_STACK(stack), page[k] = scroll(v), name[k], name[k]);
 		}
-		/* The files of HEAD under their folders; a row holds its name and its path, the first row is the whole repo */
-		st = gtk_tree_store_new(2, G_TYPE_STRING, G_TYPE_STRING);
+		/* The files of HEAD under their folders. A row holds its markup, its path and its arrow;
+		 * the first row is the whole repo. A folder row counts the files below it */
+		st = gtk_tree_store_new(4, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT);
 		gtk_tree_store_append(st, par, 0);
-		gtk_tree_store_set(st, par, 0, "All files", 1, "", -1);
 		if (git(&o, 0, (char *[]){"git", "ls-tree", "-r", "--name-only", "HEAD", 0})) *o = 0;
-		for (p = o; *p; prev = p, p = e) {
+		for (p = o; *p; prev = p, p = e, n++) {
 			e = p + strcspn(p, "\n");
 			if (*e) *e++ = 0;
 			while (d && strncmp(p, prev, len[d])) d--;
 			for (; d < 63 && (q = strchr(p + len[d], '/')); *q = c) {
 				c = *++q;
+				m = q - p;
+				for (k = 1, s = e; *s && !strncmp(s, p, m); s += strcspn(s, "\n"), s += !!*s) k++;
 				*q = 0;
 				gtk_tree_store_append(st, par + d + 1, par + d);
-				gtk_tree_store_set(st, par + d + 1, 0, p + len[d], 1, p, -1);
-				len[++d] = q - p;
+				set(st, par + d + 1, g_markup_printf_escaped(count, p + len[d], k), p, "pan-end-symbolic");
+				len[++d] = m;
 			}
 			gtk_tree_store_append(st, &it, par + d);
-			gtk_tree_store_set(st, &it, 0, p + len[d], 1, p, -1);
+			set(st, &it, g_markup_printf_escaped("%s", p + len[d]), p, 0);
 		}
 		free(o);
-		list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(st));
-		gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(list), -1, 0, gtk_cell_renderer_text_new(), "text", 0, NULL);
-		g_object_set(list, "headers-visible", FALSE, NULL);
+		set(st, par, g_strdup_printf(count, "<b>All files</b>", n), "", 0);
+		list = tree(GTK_TREE_MODEL(st));
 		tp = gtk_tree_model_get_path(GTK_TREE_MODEL(st), par);
 		gtk_tree_view_expand_row(GTK_TREE_VIEW(list), tp, FALSE);
 		gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), tp, 0, FALSE);
 		gtk_tree_path_free(tp);
+		g_signal_connect(list, "button-press-event", G_CALLBACK(press), 0);
+		g_signal_connect(list, "row-activated", G_CALLBACK(act), 0);
 		g_signal_connect(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), "changed", G_CALLBACK(load), 0);
 		g_signal_connect(stack, "notify::visible-child", G_CALLBACK(load), 0);
 		pane[0] = split(GTK_ORIENTATION_HORIZONTAL);
