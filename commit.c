@@ -316,21 +316,26 @@ static void all(GtkWidget *w, gpointer k)
 	for (i = 0; i < nent; i++) if (has(part, i) && !strncmp(ent[i].path, spot + 3, len)) e[n++] = ent + i;
 	go(e, n, GPOINTER_TO_INT(k), part);
 }
+/* A file has the menu of its section without "all": it acts on the selected files, as the buttons do */
 
 static void heads(GtkTreePath *p, GdkEventButton *ev)
 {
 	static const char *name[] = {"Stage all", "Unstage all", "Revert all", "Ignore all", "Delete all"};
 	GtkWidget *m = gtk_menu_new(), *i;
 	GtkTreeIter it;
-	int k, n;
+	char *s;
+	int k, n, f = file(p) >= 0;
 	part = *gtk_tree_path_get_indices(p);
 	gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &it, p);
 	g_free(spot);
 	gtk_tree_model_get(GTK_TREE_MODEL(store), &it, 3, &n, 4, &spot, -1);
 	for (k = 0; k < 4; k++) if (use[k] >> part & 1) {
-		i = gtk_menu_item_new_with_label(name[k == 2 && part == 2 ? 4 : k]);
-		gtk_widget_set_sensitive(i, n > 0);
-		g_signal_connect(i, "activate", G_CALLBACK(all), GINT_TO_POINTER(k));
+		s = g_strdup(name[k == 2 && part == 2 ? 4 : k]);
+		s[strlen(s) - 4 * f] = 0;
+		i = gtk_menu_item_new_with_label(s);
+		g_free(s);
+		gtk_widget_set_sensitive(i, f || n > 0);
+		g_signal_connect(i, "activate", f ? G_CALLBACK(run) : G_CALLBACK(all), GINT_TO_POINTER(k));
 		gtk_menu_shell_insert(GTK_MENU_SHELL(m), i, -1);
 	}
 	g_signal_connect(m, "selection-done", G_CALLBACK(gtk_widget_destroy), 0);
@@ -343,10 +348,12 @@ static gboolean press(GtkTreeView *v, GdkEventButton *ev)
 	GtkTreePath *p;
 	int r = 0;
 	if (gtk_tree_view_get_path_at_pos(v, ev->x, ev->y, &p, 0, 0, 0)) {
-		if ((r = file(p) < 0) && ev->type == GDK_BUTTON_PRESS) {
-			if (ev->button == 3) heads(p, ev);
-			else act(v, p);
-		}
+		r = file(p) < 0;
+		if (ev->type == GDK_BUTTON_PRESS && ev->button == 3) {
+			if (!r && !gtk_tree_selection_path_is_selected(gtk_tree_view_get_selection(v), p)) gtk_tree_view_set_cursor(v, p, 0, FALSE);
+			heads(p, ev);
+			r = 1;
+		} else if (r && ev->type == GDK_BUTTON_PRESS) act(v, p);
 		gtk_tree_path_free(p);
 	}
 	return r;

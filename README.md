@@ -46,6 +46,7 @@ the graph of all branches at the left, the diff of the selected commit at the ri
 - The colour of a name tells its state: added is green, deleted is red, modified and untracked are plain.
   Any other state shows its letter after the name.
 - Click a section title or a folder to collapse or open it.
+- Right-click a file for Stage, Unstage, Revert, Delete or Ignore; it acts on the selected files.
 - Right-click a section title or a folder for Stage all, Unstage all, Revert all, Delete all or Ignore all.
   It acts on all files below it, also those in closed folders.
 - Click a hunk header (`@@ ...`) to stage or unstage that hunk.
