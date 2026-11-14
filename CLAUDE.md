@@ -15,7 +15,7 @@ no GTK 4, no libadwaita, no other libraries.
   `wgit` alone opens the commit view if `git status` lists anything, else the log view.
 - `wgit c[ommit] [path]` opens the commit view, like gitg's.
   `wgit l[og] [path]` opens the log view, gitk-like.
-  `wgit s[tat] [path]` opens the stat view: tables of authors, files and activity.
+  `wgit s[tat] [path]` opens the stat view: totals and authors of a path and a period.
   Any unique prefix of a subcommand works.
 
 The desktop has no xdg-desktop-portal and no gsettings or dconf tools.
@@ -57,9 +57,10 @@ Why some things are as they are:
   mirrored so the first column is next to the hash.
   The column is at least four cells wide, the width of two branches, so a new branch does not move the rows.
 - `stats()` in `git.c` makes the whole text of the stat view from one `git log --numstat`, so `test.sh` tests it.
-  The bars are block characters (U+2581 to U+258F); `stat.c` only gives them a colour.
+  The activity bars and the tables of files, folders and file types were removed on 2026-11-14,
+  until the user knows what the view must show; commit 2caae6a still has them.
   The three range pages are text views on one buffer, so the range switcher is a plain stack switcher.
-  `stat_view()` puts its top widget in `pane[0]` only as a built mark; it has no panes to save.
+  The file tree at the left is read once from HEAD with `git ls-tree`, when the view is built.
 - One CSS rule removes the 100 px minimum width of the switcher buttons.
   Without it the three view buttons do not fit over the diff of the log view.
 
@@ -81,7 +82,7 @@ podman build -t wgit-build .
 podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build make wgit test
 ```
 
-`make test` builds `wgit-test` and runs `test.sh`; the last line is `47 passed, 0 failed`.
+`make test` builds `wgit-test` and runs `test.sh`; the last line is `48 passed, 0 failed`.
 The test names are in `test.sh`, the commands of `wgit-test` in `test.c`.
 
 Size:
@@ -146,8 +147,8 @@ and start a small GDBus mock that owns `org.freedesktop.portal.Desktop` like tar
 The global rules for style, commits and language apply. For this repo:
 
 - The shortest general code that does the job, no frameworks.
-  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 60,072 bytes.
-  It is 128 bytes under the next 4096 byte step, so count the imports of a change.
+  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 64,168 bytes.
+  The size changes in steps of 4096 bytes, so count the imports of a change.
 - Commit scopes are the areas: `git:`, `diff:`, `log:`, `build:`, `docs:`.
   End the message with the `Co-Authored-By` line of the model that did the work.
 - Every bug fix comes with a regression test in `test.sh`, and the failing test comes first.

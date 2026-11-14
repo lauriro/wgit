@@ -8,7 +8,7 @@
 GtkWidget *win;
 static GtkWidget *stack, *page[3], *pane[6], *(*view[])(GtkWidget **) = {commit_view, log_view, stat_view};
 static const char *title[] = {"Commit", "Log", "Stat"};
-static int geo[] = {1000, 700, 300, 0, 450, 0, 0, 0};
+static int geo[] = {1000, 700, 300, 0, 450, 0, 250, 0};
 static const char order[] = {1, 0, 2};
 static char *conf;
 
@@ -31,10 +31,10 @@ static gboolean quit(GtkWidget *w)
 	int k;
 	if (!(gdk_window_get_state(gtk_widget_get_window(w)) & (GDK_WINDOW_STATE_MAXIMIZED | GDK_WINDOW_STATE_FULLSCREEN)))
 		gtk_window_get_size(GTK_WINDOW(w), geo, geo + 1);
-	for (k = 0; k < 4; k++) if (pane[k & 2]) geo[k + 2] = gtk_paned_get_position(GTK_PANED(pane[k]));
+	for (k = 0; k < 5; k++) if (pane[k & 6]) geo[k + 2] = gtk_paned_get_position(GTK_PANED(pane[k]));
 	g_mkdir_with_parents(g_get_user_state_dir(), 0700);
 	if ((f = fopen(conf, "w"))) {
-		fprintf(f, "%d %d %d %d %d %d\n", geo[0], geo[1], geo[2], geo[3], geo[4], geo[5]);
+		fprintf(f, "%d %d %d %d %d %d %d\n", geo[0], geo[1], geo[2], geo[3], geo[4], geo[5], geo[6]);
 		fclose(f);
 	}
 	return FALSE;
@@ -131,7 +131,7 @@ int app(const char *path, int v)
 	gtk_css_provider_load_from_data(css = gtk_css_provider_new(), "stackswitcher button { min-width: 0 }", -1, 0);
 	gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), (GtkStyleProvider *)css, GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 	if ((f = fopen(conf = g_strdup_printf("%s/wgit", g_get_user_state_dir()), "r"))) {
-		fscanf(f, "%d %d %d %d %d %d", geo, geo + 1, geo + 2, geo + 3, geo + 4, geo + 5);
+		fscanf(f, "%d %d %d %d %d %d %d", geo, geo + 1, geo + 2, geo + 3, geo + 4, geo + 5, geo + 6);
 		fclose(f);
 	}
 	win = g_object_new(GTK_TYPE_WINDOW, "title", top, "default-width", geo[0], "default-height", geo[1], NULL);

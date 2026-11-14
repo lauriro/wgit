@@ -24,7 +24,7 @@ the diff of the selected file's section on the right, with a title per file,
 a message box and Cancel, Rescan and Commit buttons below.
 `wgit log` (or `wgit l`) opens the log view, like gitk:
 the graph of all branches at the left, the diff of the selected commit at the right, its details below.
-`wgit stat` (or `wgit s`) opens the stat view: who changed what, and when.
+`wgit stat` (or `wgit s`) opens the stat view: the commits, lines and authors of a path and a period.
 `wgit c <path>`, `wgit l <path>` and `wgit s <path>` work in the repo of that path.
 
 
@@ -98,13 +98,11 @@ the graph of all branches at the left, the diff of the selected commit at the ri
 
 ## Stat view
 
+- The file tree at the left shows the files of HEAD. Select a folder or a file to see the stats of that path only;
+  `All files` shows the whole repo. The tree is read once, when the view opens.
 - The `[ Last month | Last year | All ]` switcher sets the period: the last 30 days, the last 365 days, or the whole history of HEAD.
 - The first line counts the commits, the authors, the days with a commit and the added and removed lines.
-- Activity shows the commits over the period, at most 60 bars, the oldest at the left.
-  Below it, one row per weekday shows the commits per hour, in the time zone of each author.
-- Four tables list the authors, the files, the directories and the file types, the top 20 of each by commits.
-  The percent is the share of all commits in the period; the bar compares a row with the first row.
-  An author row also has the days with a commit and the date of the last commit.
+- Then come the authors and their commit counts, as `git shortlog -ns` shows them, for the period and the path.
 - `All` reads the whole history in one git run, so a large repo takes some time.
 
 ## Contributing
