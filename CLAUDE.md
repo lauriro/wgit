@@ -63,6 +63,9 @@ Why some things are as they are:
   The file tree at the left is read once from HEAD with `git ls-tree`, when the view is built.
 - One CSS rule removes the 100 px minimum width of the switcher buttons.
   Without it the three view buttons do not fit over the diff of the log view.
+- A second CSS rule gives the text views named `plain` the background of the window:
+  the commit details of the log view and the message box of the commit view.
+  With the background of a text field, the padding around them looked like a frame.
 
 ## Build and test
 

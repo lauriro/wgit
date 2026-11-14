@@ -333,7 +333,7 @@ GtkWidget *log_view(GtkWidget **pane)
 	g_object_set(list, "headers-visible", FALSE, "fixed-height-mode", TRUE, NULL);
 	g_signal_connect(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), "changed", G_CALLBACK(pick), 0);
 	g_signal_connect(list, "button-release-event", G_CALLBACK(chip), 0);
-	v = g_object_new(GTK_TYPE_TEXT_VIEW, "editable", FALSE, "monospace", TRUE, "wrap-mode", GTK_WRAP_WORD_CHAR, NULL);
+	v = g_object_new(GTK_TYPE_TEXT_VIEW, "name", "plain", "editable", FALSE, "monospace", TRUE, "wrap-mode", GTK_WRAP_WORD_CHAR, NULL);
 	info = gtk_text_view_get_buffer(GTK_TEXT_VIEW(v));
 	for (k = 0; k < 5; k++) gtk_text_buffer_create_tag(info, ink[k][0], "foreground", ink[k][1], NULL);
 	gtk_text_buffer_create_tag(info, "bold", "weight", PANGO_WEIGHT_BOLD, NULL);

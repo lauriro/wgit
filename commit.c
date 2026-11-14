@@ -465,7 +465,7 @@ GtkWidget *commit_view(GtkWidget **pane)
 	gtk_box_pack_start(GTK_BOX(l), scroll(list), TRUE, TRUE, 0);
 	gtk_paned_pack1(GTK_PANED(pane[1]), gtk_widget_get_parent(dv = diff_view(lines, menu, top)), TRUE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[1]), r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6), FALSE, FALSE);
-	gtk_box_pack_start(GTK_BOX(r), b = scroll(m = g_object_new(GTK_TYPE_TEXT_VIEW, "monospace", TRUE, NULL)), TRUE, TRUE, 0);
+	gtk_box_pack_start(GTK_BOX(r), b = scroll(m = g_object_new(GTK_TYPE_TEXT_VIEW, "name", "plain", "monospace", TRUE, NULL)), TRUE, TRUE, 0);
 	gtk_widget_set_size_request(b, -1, 120);
 	msg = gtk_text_view_get_buffer(GTK_TEXT_VIEW(m));
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);

@@ -150,7 +150,7 @@ int app(const char *path, int v)
 	g_set_prgname("wgit");
 	gtk_init(0, 0);
 	theme();
-	gtk_css_provider_load_from_data(css = gtk_css_provider_new(), "stackswitcher button { min-width: 0 }", -1, 0);
+	gtk_css_provider_load_from_data(css = gtk_css_provider_new(), "stackswitcher button { min-width: 0 } #plain, #plain text { background: none }", -1, 0);
 	gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), (GtkStyleProvider *)css, GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 	if ((f = fopen(conf = g_strdup_printf("%s/wgit", g_get_user_state_dir()), "r"))) {
 		fscanf(f, "%d %d %d %d %d %d %d", geo, geo + 1, geo + 2, geo + 3, geo + 4, geo + 5, geo + 6);
