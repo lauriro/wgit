@@ -8,7 +8,9 @@ typedef void Hunk(int from, int to);
 typedef void Menu(GtkMenu *m, int hunk);
 typedef void Top(const char *path);
 
-/* A file list row has this much space above its arrow and text and below its text. */
+/* A file list row has this much space above its arrow and text and below its text.
+ * The arrow image is as tall as the text above its base line plus this space, so a title is as tall as a list row
+ * with any font; asc is that height of the text. */
 #define PAD 3
 
 /* A sixth of an em after the added count keeps it apart from the removed count. */
@@ -17,7 +19,7 @@ typedef void Top(const char *path);
 
 /* GTK scrolls to a file in steps. From diff_goto() until the pointer is used on the diff, a scroll is not the user's,
  * so it must not move the selection in the file list. */
-static int at = -1, one = -1, jump;
+static int at = -1, one = -1, jump, asc;
 static char *font;
 static const char *tags[][2] = {
 	{"head", "#57c"},
@@ -50,11 +52,12 @@ static void arrow(GtkTextView *v, GtkTextIter *it, int closed)
 {
 	GtkIconInfo *i = gtk_icon_theme_lookup_icon(gtk_icon_theme_get_default(), closed ? "pan-end-symbolic" : "pan-down-symbolic", 16, 0);
 	GdkPixbuf *p = i ? gtk_icon_info_load_symbolic_for_context(i, gtk_widget_get_style_context(GTK_WIDGET(v)), 0, 0) : 0, *q;
-	int m = gtk_text_view_get_left_margin(v);
+	int m = gtk_text_view_get_left_margin(v), a;
 	if (p) {
-		q = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, m + gdk_pixbuf_get_width(p), gdk_pixbuf_get_height(p));
+		a = MAX(asc + 2 * PAD - gdk_pixbuf_get_height(p), 0);
+		q = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, m + gdk_pixbuf_get_width(p), asc + PAD);
 		gdk_pixbuf_fill(q, 0);
-		gdk_pixbuf_copy_area(p, 0, 0, gdk_pixbuf_get_width(p), gdk_pixbuf_get_height(p) - PAD, q, m, PAD);
+		gdk_pixbuf_copy_area(p, 0, 0, gdk_pixbuf_get_width(p), asc + PAD - a, q, m, a);
 		gtk_text_buffer_insert_pixbuf(gtk_text_view_get_buffer(v), it, q);
 		g_object_unref(q);
 		g_object_unref(p);
@@ -242,9 +245,18 @@ GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 	GtkWidget *v = g_object_new(GTK_TYPE_TEXT_VIEW, "editable", FALSE, "monospace", TRUE, "left-margin", 6, "right-margin", 6, "bottom-margin", 6, NULL);
 	GtkWidget *s = scroll(v);
 	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(v));
+	PangoLayout *l;
+	char *t;
 	int i;
 	for (i = 0; i < 4; i++) gtk_text_buffer_create_tag(b, tags[i][0], "foreground", tags[i][1], NULL);
-	if (!font) g_object_get(gtk_settings_get_default(), "gtk-font-name", &font, NULL);
+	if (!font) {
+		g_object_get(gtk_settings_get_default(), "gtk-font-name", &font, NULL);
+		t = g_markup_printf_escaped("<span font=\"%s\" weight=\"bold\">x</span>", font);
+		pango_layout_set_markup(l = gtk_widget_create_pango_layout(v, 0), t, -1);
+		asc = pango_layout_get_baseline(l) / PANGO_SCALE;
+		g_object_unref(l);
+		g_free(t);
+	}
 	gtk_text_buffer_create_tag(b, "title", "font", font, "pixels-below-lines", PAD, "left-margin", 0, "right-margin", 0, "paragraph-background", "rgba(128,128,128,0.2)", NULL);
 	gtk_text_buffer_create_tag(b, "bold", "weight", PANGO_WEIGHT_BOLD, NULL);
 	gtk_text_buffer_create_tag(b, "hide", "invisible", TRUE, NULL);
