@@ -129,7 +129,7 @@ The window opens at 0,0 without decorations, 1000x700, when `~/.local/state/wgit
 Take a screenshot first and read the PNG with the Read tool to find the positions.
 `log.txt` must stay empty: a wrong property name gives a GTK warning there, not a build error.
 In the commit view, list rows are 23 px apart from y 57, the bar buttons are at y 22
-(Log, Commit and Stat at 821, 892 and 964), and Cancel, Rescan and Commit are at 776, 861 and 950, y 676.
+(Log, Commit and Stat at 821, 892 and 964), and Rescan and Commit are at 861 and 950, y 676.
 To check the theme, add `dbus-daemon dbus-bin` to the image, run the script under `dbus-run-session --`,
 and start a small GDBus mock that owns `org.freedesktop.portal.Desktop` like tark-shell does.
 

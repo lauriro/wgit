@@ -428,8 +428,8 @@ static gboolean key(GtkWidget *w, GdkEventKey *ev)
 
 GtkWidget *commit_view(GtkWidget **pane)
 {
-	static const char *end[] = {"Commit", "Rescan", "Cancel"};
-	GCallback fn[] = {G_CALLBACK(submit), G_CALLBACK(reload), G_CALLBACK(gtk_window_close)};
+	static const char *end[] = {"Commit", "Rescan"};
+	GCallback fn[] = {G_CALLBACK(submit), G_CALLBACK(reload)};
 	GtkWidget *l, *r, *b, *m, *c;
 	GtkTreeViewColumn *col;
 	GtkCellRenderer *name;
@@ -473,7 +473,7 @@ GtkWidget *commit_view(GtkWidget **pane)
 	msg = gtk_text_view_get_buffer(GTK_TEXT_VIEW(m));
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), amend = gtk_check_button_new_with_label("Amend"), FALSE, FALSE, 0);
-	for (k = 0; k < 3; k++) {
+	for (k = 0; k < 2; k++) {
 		gtk_box_pack_end(GTK_BOX(b), c = gtk_button_new_with_label(end[k]), FALSE, FALSE, 0);
 		g_signal_connect_swapped(c, "clicked", fn[k], win);
 	}

@@ -21,7 +21,7 @@ wgit is one window with three views, and the `[ Log | Commit | Stat ]` switcher 
 `wgit commit` (or `wgit c`, any unique prefix) opens the commit view, like gitg's:
 staged, unstaged and untracked files in one list on the left,
 the diff of the selected file's section on the right, with a title per file,
-a message box and Cancel, Rescan and Commit buttons below.
+a message box and Rescan and Commit buttons below.
 `wgit log` (or `wgit l`) opens the log view, like gitk:
 the graph of all branches at the left, the diff of the selected commit at the right, its details below.
 `wgit stat` (or `wgit s`) opens the stat view: the commits, lines and authors of a path and a period.
@@ -58,7 +58,7 @@ the graph of all branches at the left, the diff of the selected commit at the ri
 - Amend loads the last message and commits with `--amend`.
   While Amend is on, Staged also shows the changes of the last commit.
   Unstage a file, hunk or line to take it out of the last commit.
-- Cancel closes wgit without a commit.
+- The × at the top right closes wgit without a commit.
 - Drag the line over the message box to make the box higher.
 - wgit remembers the window size and the pane positions of each view in `~/.local/state/wgit`.
   It does not save the size of a maximized or fullscreen window.
