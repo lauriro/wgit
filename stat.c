@@ -15,9 +15,12 @@ static void load(void)
 {
 	GtkTreeModel *m;
 	GtkTreeIter row;
+	GtkWidget *c = gtk_stack_get_visible_child(GTK_STACK(stack));
 	char *o, *s, *path = 0;
 	int k = 0;
-	while (page[k] != gtk_stack_get_visible_child(GTK_STACK(stack))) k++;
+	/* The stack has no visible page until it is shown; it loads then. */
+	if (!c) return;
+	while (page[k] != c) k++;
 	if (gtk_tree_selection_get_selected(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), &m, &row)) gtk_tree_model_get(m, &row, 1, &path, -1);
 	s = g_utf8_make_valid(o = stats(days[k], time(0), path && *path ? path : 0), -1);
 	g_object_set(where, "label", path && *path ? path : "All files", NULL);
@@ -109,3 +112,4 @@ GtkWidget *stat_view(GtkWidget **pane)
 	load();
 	return pane[0];
 }
+
