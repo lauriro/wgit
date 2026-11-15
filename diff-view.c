@@ -1,5 +1,6 @@
 
 #include <gtk/gtk.h>
+#include <stdlib.h>
 #include <string.h>
 #include "diff-view.h"
 #include "ui.h"
@@ -12,6 +13,7 @@ typedef void Top(const char *path);
  * The arrow image is as tall as the text above its base line plus this space, so a title is as tall as a list row
  * with any font; asc is that height of the text. */
 #define PAD 3
+#define MARGIN 6
 
 /* A sixth of an em after the added count keeps it apart from the removed count. */
 #define ADD "+%d\u2006"
@@ -30,8 +32,8 @@ static const char *tags[][2] = {
 
 static int map(GtkWidget *w, int l)
 {
-	GArray *m = g_object_get_data(G_OBJECT(w), "map");
-	return l < 0 || l >= (int)m->len ? l : g_array_index(m, int, l);
+	int *m = g_object_get_data(G_OBJECT(w), "map");
+	return !m || l < 0 || l >= *m ? l : m[l + 1];
 }
 
 static int line(GtkTextView *w, GdkEventButton *ev, GtkTextIter *a)
@@ -45,14 +47,14 @@ static int line(GtkTextView *w, GdkEventButton *ev, GtkTextIter *a)
 
 static GtkTextTag *tag(GtkTextBuffer *b, const char *name)
 {
-	return gtk_text_tag_table_lookup(gtk_text_buffer_get_tag_table(b), name);
+	return g_object_get_data(G_OBJECT(b), name);
 }
 
 static void arrow(GtkTextView *v, GtkTextIter *it, int closed)
 {
 	GtkIconInfo *i = gtk_icon_theme_lookup_icon(gtk_icon_theme_get_default(), closed ? "pan-end-symbolic" : "pan-down-symbolic", 16, 0);
 	GdkPixbuf *p = i ? gtk_icon_info_load_symbolic_for_context(i, gtk_widget_get_style_context(GTK_WIDGET(v)), 0, 0) : 0, *q;
-	int m = gtk_text_view_get_left_margin(v), a;
+	int m = MARGIN, a;
 	if (p) {
 		a = MAX(asc + 2 * PAD - gdk_pixbuf_get_height(p), 0);
 		q = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, m + gdk_pixbuf_get_width(p), asc + PAD);
@@ -95,6 +97,18 @@ static int above(GtkTextView *v, GtkTextIter *it, int y)
 	return 1;
 }
 
+/* A name with a U+2029 splits its title into two lines, so a title can lack the space or the counts. */
+static char *named(GtkTextBuffer *b, GtkTextIter *it, char **tail)
+{
+	GtkTextIter e = *it;
+	char *s, *p;
+	gtk_text_iter_forward_to_line_end(&e);
+	s = gtk_text_buffer_get_text(b, it, &e, TRUE);
+	if ((p = g_strrstr(s, "  "))) *p = 0, p += 2;
+	*tail = p ? p : s + strlen(s);
+	return s;
+}
+
 static void moved(GtkAdjustment *a, GtkTextView *v)
 {
 	GtkTextBuffer *b = gtk_text_view_get_buffer(v);
@@ -113,13 +127,8 @@ static void moved(GtkAdjustment *a, GtkTextView *v)
 	if (!gtk_text_iter_has_tag(&e, tag(b, "title"))) end += h;
 	if ((y < r.y + r.height && end > r.y) || !above(v, &it, r.y)) return;
 	gtk_text_buffer_move_mark(b, g, &it);
-	e = it;
-	gtk_text_iter_forward_to_line_end(&e);
-	s = gtk_text_buffer_get_text(b, &it, &e, TRUE);
-	if ((p = g_strrstr(s, "  "))) {
-		*p = 0;
-		((Top *)g_object_get_data(G_OBJECT(v), "top"))(s + 1);
-	}
+	s = named(b, &it, &p);
+	if ((p = strchr(s, ' '))) ((Top *)g_object_get_data(G_OBJECT(v), "top"))(p + 1);
 	g_free(s);
 }
 
@@ -152,7 +161,7 @@ static int hit(GtkTextView *v, GdkEventButton *ev, GtkTextIter *it)
 static gboolean stick(GtkTextView *v, cairo_t *cr)
 {
 	GtkStyleContext *c = gtk_widget_get_style_context(GTK_WIDGET(v));
-	GtkTextIter it, e;
+	GtkTextIter it;
 	GdkRectangle r;
 	GdkPixbuf *pb;
 	PangoLayout *l;
@@ -165,11 +174,8 @@ static gboolean stick(GtkTextView *v, cairo_t *cr)
 	cairo_set_source_rgba(cr, .5, .5, .5, .2);
 	cairo_rectangle(cr, x, y, r.width, h);
 	cairo_fill(cr);
-	e = it;
-	gtk_text_iter_forward_to_line_end(&e);
-	s = gtk_text_buffer_get_text(gtk_text_view_get_buffer(v), &it, &e, TRUE);
-	*(p = g_strrstr(s, "  ")) = 0;
-	if ((q = strchr(p += 2, '-'))) *q++ = 0;
+	s = named(gtk_text_view_get_buffer(v), &it, &p);
+	if ((q = strchr(p, '-'))) *q++ = 0;
 	m = g_markup_printf_escaped("<span font=\"%s\"><b>%s</b>  <span foreground=\"#2a2\">%s</span><span foreground=\"#d33\">%s%s</span></span>", font, s, p, q ? "-" : "", q ? q : "");
 	pango_layout_set_markup(l = gtk_widget_create_pango_layout(GTK_WIDGET(v), 0), m, -1);
 	pango_layout_get_pixel_size(l, 0, &lh);
@@ -203,23 +209,27 @@ static gboolean click(GtkTextView *w, GdkEventButton *ev, Hunk *hunk)
 	return FALSE;
 }
 
-static gboolean press(GtkTextView *w, GdkEventButton *ev)
+/* Only a view with a menu keeps the line: the views share at and one. */
+static gboolean press(GtkTextView *w, GdkEventButton *ev, Menu *menu)
 {
 	GtkTextIter a;
 	gunichar c;
 	if (ev->button == 1 && hit(w, ev, &a)) return TRUE;
-	if (ev->button == 3) {
+	if (ev->button == 3 && menu) {
 		one = at = line(w, ev, &a);
 		c = gtk_text_iter_get_char(&a);
-		for (; at >= 0 && gtk_text_iter_get_char(&a) != '@'; gtk_text_iter_backward_line(&a)) at--;
+		for (; at >= 0 && gtk_text_iter_get_char(&a) != '@'; gtk_text_iter_backward_line(&a))
+			at = gtk_text_iter_has_tag(&a, tag(gtk_text_view_get_buffer(w), "title")) ? -1 : at - 1;
 		if (at < 0 || (c != '+' && c != '-')) one = -1;
 	}
 	return FALSE;
 }
 
+/* The line under the pointer is for one menu only: a menu from the keyboard has no line. */
 static void popup(GtkTextView *w, GtkWidget *m, Menu *menu)
 {
-	if (GTK_IS_MENU(m)) menu(GTK_MENU(m), map(GTK_WIDGET(w), at));
+	menu(GTK_MENU(m), map(GTK_WIDGET(w), at));
+	at = one = -1;
 }
 
 /* GTK measures a new text bit by bit, and a scroll cannot pass the height measured so far,
@@ -242,7 +252,7 @@ static void all(GtkWidget *c, gpointer hide)
 
 GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 {
-	GtkWidget *v = g_object_new(GTK_TYPE_TEXT_VIEW, "editable", FALSE, "monospace", TRUE, "left-margin", 6, "right-margin", 6, "bottom-margin", 6, NULL);
+	GtkWidget *v = g_object_new(GTK_TYPE_TEXT_VIEW, "editable", FALSE, "monospace", TRUE, "left-margin", MARGIN, "right-margin", MARGIN, "bottom-margin", MARGIN, NULL);
 	GtkWidget *s = scroll(v);
 	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(v));
 	PangoLayout *l;
@@ -257,12 +267,11 @@ GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 		g_object_unref(l);
 		g_free(t);
 	}
-	gtk_text_buffer_create_tag(b, "title", "font", font, "pixels-below-lines", PAD, "left-margin", 0, "right-margin", 0, "paragraph-background", "rgba(128,128,128,0.2)", NULL);
+	g_object_set_data(G_OBJECT(b), "title", gtk_text_buffer_create_tag(b, "title", "font", font, "pixels-below-lines", PAD, "left-margin", 0, "right-margin", 0, "paragraph-background", "rgba(128,128,128,0.2)", NULL));
 	gtk_text_buffer_create_tag(b, "bold", "weight", PANGO_WEIGHT_BOLD, NULL);
-	gtk_text_buffer_create_tag(b, "hide", "invisible", TRUE, NULL);
-	g_object_set_data(G_OBJECT(v), "map", g_array_new(FALSE, FALSE, sizeof(int)));
+	g_object_set_data(G_OBJECT(b), "hide", gtk_text_buffer_create_tag(b, "hide", "invisible", TRUE, NULL));
 	g_signal_connect(v, "button-release-event", G_CALLBACK(click), hunk);
-	g_signal_connect(v, "button-press-event", G_CALLBACK(press), 0);
+	g_signal_connect(v, "button-press-event", G_CALLBACK(press), menu);
 	g_signal_connect_after(v, "draw", G_CALLBACK(stick), 0);
 	if (menu) g_signal_connect(v, "populate-popup", G_CALLBACK(popup), menu);
 	if (top) {
@@ -297,13 +306,12 @@ static const char *num(char *s, const char *fmt, int n)
 	return s;
 }
 
-static void title(GtkTextView *v, GArray *map, GtkTextMark *m, int at, const char *name, int len, int a, int d)
+static void title(GtkTextView *v, GtkTextMark *m, const char *name, int len, int a, int d)
 {
 	GtkTextBuffer *b = gtk_text_view_get_buffer(v);
 	GtkTextIter it, st;
 	char s[16];
 	gtk_text_buffer_get_iter_at_mark(b, &it, m);
-	g_array_insert_val(map, gtk_text_iter_get_line(&it), at);
 	arrow(v, &it, 0);
 	gtk_text_buffer_insert(b, &it, " ", -1);
 	gtk_text_buffer_insert_with_tags_by_name(b, &it, name, len, "bold", NULL);
@@ -316,46 +324,51 @@ static void title(GtkTextView *v, GArray *map, GtkTextMark *m, int at, const cha
 	gtk_text_buffer_delete_mark(b, m);
 }
 
+/* The title of a file is put in last, when its counts are known, so it gets its place in the map at the first line
+ * of the file. The map starts with its length and doubles its room. */
 void diff_files(GtkWidget *view, const char *text)
 {
 	GtkTextView *tv = GTK_TEXT_VIEW(view);
 	GtkTextBuffer *b = gtk_text_view_get_buffer(tv);
-	GArray *map = g_object_get_data(G_OBJECT(view), "map");
 	GtkWidget *sum = g_object_get_data(G_OBJECT(view), "sum");
 	GtkTextMark *m = 0;
 	GtkTextIter it;
 	const char *p, *e, *n, *name = 0;
 	char *t = g_utf8_make_valid(text ? text : "", -1), s[2] = "", x[16], y[16];
-	int files = 0, hdr = 0, len = 0, a = 0, d = 0, add = 0, del = 0, top = 0, l, k;
+	int files = 0, hdr = 0, len = 0, a = 0, d = 0, add = 0, del = 0, l, k = 0;
+	int *map = g_object_get_data(G_OBJECT(view), "map");
 	gtk_text_buffer_set_text(b, "", 0);
 	gtk_text_buffer_get_end_iter(b, &it);
-	g_array_set_size(map, 0);
-	for (p = t, l = 0; *p; p = n, l++) {
+	for (p = t, l = 0;; p = n, l++) {
+		if (!(k & (k + 1))) map = realloc(map, (2 * k + 3) * sizeof *map);
+		if (!*p) break;
 		e = p + strcspn(p, "\n");
 		n = e + !!*e;
-		if (!strncmp(p, "diff --git ", 11)) {
-			if (m) title(tv, map, m, top, name, len, a, d);
+		if (hdr && (!strncmp(p, "index ", 6) || !strncmp(p, "--- ", 4) || !strncmp(p, "+++ ", 4))) continue;
+		if (hdr && (!strncmp(p, "rename to ", 10) || !strncmp(p, "copy to ", 8))) name = p + (*p == 'r' ? 10 : 8), len = e - name;
+		map[++k] = l;
+		/* An unmerged file has `diff --cc name`, or `* Unmerged path name` in the index.
+		 * Else the two names are equal and the second half of the line is the name, or `rename to` or `copy to` has it. */
+		if (!strncmp(p, "diff --", 7) || *p == '*') {
+			if (m) title(tv, m, name, len, a, d);
 			gtk_text_buffer_get_end_iter(b, &it);
 			m = gtk_text_buffer_create_mark(b, 0, &it, TRUE);
-			k = (e - p - 12) / 2;
-			name = p + k + 14;
+			name = p + (*p == '*' ? 16 : p[7] == 'c' ? 10 : (e - p + 16) / 2);
 			len = e - name;
-			top = l;
 			hdr = 1;
 			a = d = 0;
 			files++;
 			continue;
 		}
-		if (hdr && !strncmp(p, "+++ b/", 6)) name = p + 6, len = e - name;
 		if (*p == '@') hdr = 0;
-		if (hdr && (!strncmp(p, "index ", 6) || !strncmp(p, "--- ", 4) || !strncmp(p, "+++ ", 4))) continue;
 		if (!hdr) a += *p == '+', d += *p == '-', add += *p == '+', del += *p == '-';
 		*s = *p;
-		g_array_append_val(map, l);
 		gtk_text_buffer_insert_with_tags_by_name(b, &it, p, n - p, hdr ? "head" : strchr("@+-", *p) ? s : 0, NULL);
 	}
-	if (m) title(tv, map, m, top, name, len, a, d);
+	if (m) title(tv, m, name, len, a, d);
 	g_free(t);
+	*map = k;
+	g_object_set_data(G_OBJECT(view), "map", map);
 	if (sum) {
 		t = g_strdup_printf("%d file%s  <span foreground=\"%s\">%s</span><span foreground=\"%s\">%s</span>", files, files == 1 ? "" : "s", tags[2][1], num(x, ADD, add), tags[3][1], num(y, DEL, del));
 		g_object_set(sum, "label", t, NULL);
@@ -363,47 +376,39 @@ void diff_files(GtkWidget *view, const char *text)
 	}
 }
 
-void diff_fold(GtkWidget *view, const char *dir, int len, int hide)
+/* A path can have two titles, as a file that became a link has; diff_goto() needs the first */
+int diff_fold(GtkWidget *view, const char *dir, int len, int hide)
 {
 	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(view));
-	GtkTextIter it, e;
+	GtkTextIter it;
 	char *t, *p;
-	int l, n = gtk_text_buffer_get_line_count(b);
+	int l, r = -1, n = gtk_text_buffer_get_line_count(b);
 	for (l = 0; l < n; l++) {
 		gtk_text_buffer_get_iter_at_line(b, &it, l);
 		if (!gtk_text_iter_has_tag(&it, tag(b, "title"))) continue;
-		e = it;
-		gtk_text_iter_forward_to_line_end(&e);
-		t = gtk_text_buffer_get_text(b, &it, &e, TRUE);
-		if ((p = strchr(t, ' ')) && !strncmp(p + 1, dir, len)) fold(GTK_TEXT_VIEW(view), l, hide);
+		t = named(b, &it, &p);
+		if ((p = strchr(t, ' ')) && !strncmp(p + 1, dir, len)) {
+			fold(GTK_TEXT_VIEW(view), l, hide);
+			if (r < 0) r = l;
+		}
 		g_free(t);
 	}
+	return r;
 }
 
+/* A whole name is a prefix that has the end of the name in it */
 void diff_goto(GtkWidget *view, const char *path)
 {
 	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(view));
 	GtkTextMark *g;
-	GtkTextIter it, e;
-	char *t, *p;
-	int l, n = gtk_text_buffer_get_line_count(b), k = strlen(path), hit;
-	for (l = 0; l < n; l++) {
-		gtk_text_buffer_get_iter_at_line(b, &it, l);
-		if (!gtk_text_iter_has_tag(&it, tag(b, "title"))) continue;
-		e = it;
-		gtk_text_iter_forward_to_line_end(&e);
-		t = gtk_text_buffer_get_text(b, &it, &e, TRUE);
-		hit = (p = strchr(t, ' ')) && !strncmp(p + 1, path, k) && g_strrstr(t, "  ") == p + 1 + k;
-		g_free(t);
-		if (!hit) continue;
-		fold(GTK_TEXT_VIEW(view), l, 0);
-		gtk_text_buffer_get_iter_at_line(b, &it, l);
-		if ((g = gtk_text_buffer_get_mark(b, "goto"))) gtk_text_buffer_move_mark(b, g, &it);
-		else g = gtk_text_buffer_create_mark(b, "goto", &it, TRUE);
-		jump = 1;
-		gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(view), g, 0, TRUE, 0, 0);
-		return;
-	}
+	GtkTextIter it;
+	int l = diff_fold(view, path, strlen(path) + 1, 0);
+	if (l < 0) return;
+	gtk_text_buffer_get_iter_at_line(b, &it, l);
+	if ((g = gtk_text_buffer_get_mark(b, "goto"))) gtk_text_buffer_move_mark(b, g, &it);
+	else g = gtk_text_buffer_create_mark(b, "goto", &it, TRUE);
+	jump = 1;
+	gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(view), g, 0, TRUE, 0, 0);
 }
 
 int diff_lines(GtkWidget *view, int *from, int *to)

@@ -13,11 +13,11 @@ static const char *head[] = {"Staged", "Unstaged", "Untracked"}, *arrow[] = {"pa
 static const char *verb[] = {"Stage", "Unstage", "Revert", "Ignore"}, *ask[][2] = {
 	{"Revert changes in %d file%s?", "_Revert"},
 	{"Delete %d untracked file%s?", "_Delete"},
-	{"Revert this hunk in %s?", "_Revert"},
-	{"Revert these lines in %s?", "_Revert"}
+	{"Revert this hunk?", "_Revert"},
+	{"Revert these lines?", "_Revert"}
 };
 static const char use[] = {6, 1, 6, 4};
-static int sec, row, busy, follow, sorted, hunk, part, shown = -1;
+static int sec, row, busy, follow, sorted, hunk, part, from, to, shown = -1;
 /* A section or a folder has the key "\n<section>/<folder path>\n"; shut holds the keys of the closed ones, spot the key
  * of the one under the menu. its has the row of each entry, staged first, then not staged */
 static char *cur, *text, *shut, *spot;
@@ -62,9 +62,9 @@ static void hide(const char *key, int on)
 
 /* A closed folder takes the selection from a file in it. The diff and the place in the list stay then;
  * only a list that was filled again with no file to select empties the diff */
-static void sel(GtkTreeSelection *s)
+static void sel(GtkTreeSelection *s, gpointer redo)
 {
-	GtkTreePath *p;
+	GtkTreePath *p, *c;
 	GList *l;
 	const char *q;
 	int k;
@@ -72,19 +72,16 @@ static void sel(GtkTreeSelection *s)
 	l = gtk_tree_selection_get_selected_rows(s, 0);
 	gtk_tree_view_get_cursor(GTK_TREE_VIEW(list), &p, 0);
 	if (l) {
-		if (!p || !gtk_tree_selection_path_is_selected(s, p)) {
-			gtk_tree_path_free(p);
-			p = gtk_tree_path_copy(l->data);
-		}
+		c = p && gtk_tree_selection_path_is_selected(s, p) ? p : l->data;
 		g_free(cur);
-		cur = g_strdup(ent[file(p)].path);
-		sec = *gtk_tree_path_get_indices(p);
+		cur = g_strdup(ent[file(c)].path);
+		sec = *gtk_tree_path_get_indices(c);
 		for (row = 0, k = file(l->data); k--;) row += !!has(sec, k);
 	}
-	if (l ? sec != shown : shown < 0) {
+	if (redo || (l ? sec != shown : shown < 0)) {
+		if (l) shown = sec;
 		free(text);
-		diff_files(dv, text = l ? diffs(sec, ent, nent) : 0);
-		shown = l ? sec : -1;
+		diff_files(dv, text = shown < 0 ? 0 : diffs(shown, ent, nent));
 		for (q = shut; *q; q += strcspn(q + 1, "\n") + 2) hide(q, 1);
 	}
 	if (l && !follow) diff_goto(dv, cur);
@@ -185,7 +182,7 @@ static void fill(void)
 	}
 	busy = 0;
 	shown = -1;
-	sel(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
+	sel(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), 0);
 }
 
 static void reload(void)
@@ -319,7 +316,6 @@ static void all(GtkWidget *w, gpointer k)
 /* A file has the menu of its section without "all": it acts on the selected files, as the buttons do */
 static void heads(GtkTreePath *p, GdkEventButton *ev)
 {
-	static const char *name[] = {"Stage all", "Unstage all", "Revert all", "Ignore all", "Delete all"};
 	GtkWidget *m = gtk_menu_new(), *i;
 	GtkTreeIter it;
 	char *s;
@@ -329,8 +325,7 @@ static void heads(GtkTreePath *p, GdkEventButton *ev)
 	g_free(spot);
 	gtk_tree_model_get(GTK_TREE_MODEL(store), &it, 3, &n, 4, &spot, -1);
 	for (k = 0; k < 4; k++) if (use[k] >> part & 1) {
-		s = g_strdup(name[k == 2 && part == 2 ? 4 : k]);
-		s[strlen(s) - 4 * f] = 0;
+		s = g_strdup_printf("%s%s", k == 2 && part == 2 ? "Delete" : verb[k], &" all"[4 * f]);
 		i = gtk_menu_item_new_with_label(s);
 		g_free(s);
 		gtk_widget_set_sensitive(i, f || n > 0);
@@ -366,23 +361,19 @@ static void lines(int from, int to)
 
 static void pick(GtkWidget *w, gpointer p)
 {
-	int k = GPOINTER_TO_INT(p), f = hunk, t = -1;
+	int k = GPOINTER_TO_INT(p), f = k & 1 ? from : hunk, t = k & 1 ? to : -1;
 	char *o;
 	if (k > 3) {
 		context = k > 4 ? MAX(1, context / 2) : 2 * context;
-		shown = -1;
-		sel(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
-	} else {
-		if (k & 1) diff_lines(dv, &f, &t);
-		if (k < 2 || sure(g_strdup_printf(ask[k][0], cur), ask[k][1])) done(apply(&o, text, f, t, k < 2 ? !sec : 2), &o);
-	}
+		sel(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), list);
+	} else if (k < 2 || sure(g_strdup(ask[k][0]), ask[k][1])) done(apply(&o, text, f, t, k < 2 ? !sec : 2), &o);
 }
 
 static void menu(GtkMenu *m, int h)
 {
 	static const char *name[] = {"Stage hunk", "Stage lines", "Revert hunk", "Revert lines", "More context", "Less context", "Unstage hunk", "Unstage lines"};
 	GtkWidget *i;
-	int f, t, k, n = 0, has = diff_lines(dv, &f, &t);
+	int k, n = 0, has = diff_lines(dv, &from, &to);
 	hunk = h;
 	for (k = 0; k < 6; k++) {
 		if ((k == 2 || k == 3) && sec != 1) continue;
@@ -399,14 +390,16 @@ static void menu(GtkMenu *m, int h)
 static void submit(void)
 {
 	char *s, *o;
-	int r;
+	int r, a = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(amend));
 	g_object_get(msg, "text", &s, NULL);
-	if (!(r = commit(&o, s, gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(amend))))) {
-		gtk_text_buffer_set_text(msg, "", 0);
+	if (!(r = commit(&o, s, a))) gtk_text_buffer_set_text(msg, "", 0);
+	g_free(s);
+	/* The end of amend reloads the list itself */
+	if (r || !a) done(r, &o);
+	else {
+		free(o);
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(amend), FALSE);
 	}
-	g_free(s);
-	done(r, &o);
 }
 
 static void last(GtkToggleButton *b)
