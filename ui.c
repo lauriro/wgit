@@ -53,7 +53,7 @@ static gboolean quit(GtkWidget *w)
 	int k;
 	if (!(gdk_window_get_state(gtk_widget_get_window(w)) & (GDK_WINDOW_STATE_MAXIMIZED | GDK_WINDOW_STATE_FULLSCREEN)))
 		gtk_window_get_size(GTK_WINDOW(w), geo, geo + 1);
-	for (k = 0; k < 5; k++) if (pane[k & 6]) geo[k + 2] = gtk_paned_get_position(GTK_PANED(pane[k]));
+	for (k = 0; k < 5; k++) if (pane[k & 6]) g_object_get(pane[k], "position", geo + k + 2, NULL);
 	g_mkdir_with_parents(g_get_user_state_dir(), 0700);
 	if ((f = fopen(conf, "w"))) {
 		fprintf(f, "%d %d %d %d %d %d %d\n", geo[0], geo[1], geo[2], geo[3], geo[4], geo[5], geo[6]);
@@ -105,7 +105,7 @@ static void show(int v)
 	int i = 2 * v, k, built = !!pane[i];
 	GtkWidget *w = view[v](pane + i);
 	if (built) return;
-	for (k = i; k < i + 2; k++) if (geo[k + 2]) gtk_paned_set_position(GTK_PANED(pane[k]), geo[k + 2]);
+	for (k = i; k < i + 2; k++) if (geo[k + 2]) g_object_set(pane[k], "position", geo[k + 2], NULL);
 	gtk_box_pack_start(GTK_BOX(page[v]), w, TRUE, TRUE, 0);
 	gtk_widget_show_all(w);
 }
@@ -163,7 +163,7 @@ int app(const char *path, int v)
 		gtk_widget_show_all(page[k] = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
 		gtk_stack_add_titled(GTK_STACK(stack), page[k], title[k], title[k]);
 	}
-	gtk_stack_set_visible_child(GTK_STACK(stack), page[v]);
+	g_object_set(stack, "visible-child", page[v], NULL);
 	show(v);
 	g_signal_connect(stack, "notify::visible-child", G_CALLBACK(switched), 0);
 	g_signal_connect(win, "delete-event", G_CALLBACK(quit), 0);
