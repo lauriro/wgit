@@ -44,7 +44,7 @@ static char *line(Row *r)
 	size_t n;
 	int k, l;
 	s = open_memstream(&m, &n);
-	fprintf(s, "<span foreground=\"#c55\" font_family=\"monospace\">%s</span> <span foreground=\"#39a\">%.16s</span> ", r->hash, r->date);
+	fprintf(s, "<span foreground=\"#c55\" font_family=\"monospace\">%s</span>&#x2009; <span foreground=\"#888\">%.16s</span> &#x2009;", r->hash, r->date);
 	for (p = r->refs; *p; p = e + 2 * !!*e) {
 		e = p + strcspn(p, ",");
 		for (k = 0; k < 5 && strncmp(p, kind[k][0], l = strlen(kind[k][0])); k++);
