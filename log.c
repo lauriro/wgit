@@ -43,7 +43,7 @@ static char *line(Row *r)
 	size_t n;
 	int k, l;
 	s = open_memstream(&m, &n);
-	fprintf(s, "<span foreground=\"#c55\" font_family=\"monospace\">%s</span> ", r->hash);
+	fprintf(s, "<span foreground=\"#c55\" font_family=\"monospace\">%s</span> <span foreground=\"#39a\">%.16s</span> ", r->hash, r->date);
 	for (p = r->refs; *p; p = e + 2 * !!*e) {
 		e = p + strcspn(p, ",");
 		for (k = 0; k < 5 && strncmp(p, kind[k][0], l = strlen(kind[k][0])); k++);
@@ -54,7 +54,7 @@ static char *line(Row *r)
 		g_free(t);
 	}
 	k = *r->subject == '!';
-	t = g_markup_printf_escaped("%s  <span foreground=\"#4a4\">%s</span>  <span foreground=\"#39a\">%.16s</span>", r->subject + k, r->author, r->date);
+	t = g_markup_printf_escaped("%s  <span foreground=\"#4a4\">%s</span>", r->subject + k, r->author);
 	fprintf(s, "%s%s", k ? "&#x200a;<span foreground=\"#e33\" weight=\"heavy\" size=\"125%\" line_height=\"0.6\" rise=\"-0.75pt\">!</span>" : "", t);
 	g_free(t);
 	fclose(s);
