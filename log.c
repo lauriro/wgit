@@ -16,7 +16,8 @@ static GtkTextBuffer *info;
 static Row *row;
 static char *query, *seen;
 static GtkTreeModel *filter;
-static int nrow, cells, ncom, limit, pending, tagged;
+static int nrow, cells, ncom, limit, pending, tagged, wip, again;
+static const char title[] = "Uncommitted changes";
 static double x0;
 static const char sigs[] = "GUXYRBEN", *said[][2] = {
 	{"good", "✓ Good signature"},
@@ -105,18 +106,33 @@ static int stale(void)
 	return r;
 }
 
+/* The changes of the tracked files are the first row, with the index -1, while there are any.
+ * Nothing of them is kept: a selection of the row or a click on it reads the diff, one git run each.
+ * A switch to the log view runs only this git status, so the diff of a selected row waits for a click. */
+static void dirty(void)
+{
+	GtkTreePath *p = gtk_tree_path_new_from_indices(0, -1);
+	GtkTreeIter it;
+	char *o;
+	int d = !git(&o, 0, (char *[]){"git", "status", "--porcelain", "-uno", 0}) && *o;
+	free(o);
+	if (d > wip) gtk_list_store_insert_with_values(store, 0, 0, 0, title, 1, -1, -1);
+	if (d < wip && gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &it, p)) gtk_list_store_remove(store, &it);
+	wip = d;
+	if (!gtk_tree_selection_get_selected(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), 0, 0)) gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), p, 0, FALSE);
+	gtk_tree_path_free(p);
+}
+
 static void load(void)
 {
-	GtkTreePath *p;
 	gtk_tree_view_set_model(GTK_TREE_VIEW(list), 0);
 	gtk_list_store_clear(store);
-	ncom = 0;
+	ncom = wip = 0;
 	cells = 4;
 	row = history(&nrow, limit = PAGE);
 	fill(0);
 	gtk_tree_view_set_model(GTK_TREE_VIEW(list), filter);
-	gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), p = gtk_tree_path_new_from_indices(0, -1), 0, FALSE);
-	gtk_tree_path_free(p);
+	dirty();
 }
 
 static gboolean more(gpointer all)
@@ -171,6 +187,15 @@ static gboolean paint(GtkTreeView *v, cairo_t *cr)
 		gtk_tree_model_get(filter, &it, 1, &i, -1);
 		x0 = x;
 		cy = y + r.height / 2.0;
+		/* The changes stand on HEAD: the line goes to it only when HEAD is the row below */
+		if (i < 0) {
+			k = nrow && !strncmp(row->refs, "HEAD", 4) ? strchr(row->graph, '*') - row->graph : -1;
+			if (k >= 0) stroke(cr, k, col(k), cy + 4, col(k), cy + r.height);
+			cairo_set_source_rgba(cr, .88, .75, .25, 1);
+			cairo_arc(cr, col(MAX(k, 0)), cy, 3.5, 0, 2 * G_PI);
+			cairo_stroke(cr);
+			continue;
+		}
 		for (j = i - 1; top && j >= 0 && !row[j].hash; j--);
 		if (top && j >= 0) span(cr, j, i, cy - r.height, r.height);
 		for (j = i + 1; j < nrow && !row[j].hash; j++);
@@ -234,7 +259,13 @@ static void pick(GtkTreeSelection *s)
 	int i;
 	if (!gtk_tree_selection_get_selected(s, &m, &it)) return;
 	gtk_tree_model_get(m, &it, 1, &i, -1);
-	if (!git(&o, 0, (char *[]){"git", "show", "--format=%H%x00%P%x00%an <%ae>%x00%ai%x00%G?%x00%GS%x00%B%x00%N%x00",
+	if (i < 0) {
+		tagged = 0;
+		gtk_text_buffer_set_text(info, "", 0);
+		put(title, -1, "bold");
+		git(&o, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", "HEAD", 0});
+		diff_files(dv, o);
+	} else if (!git(&o, 0, (char *[]){"git", "show", "--format=%H%x00%P%x00%an <%ae>%x00%ai%x00%G?%x00%GS%x00%B%x00%N%x00",
 		"--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", "--diff-merges=first-parent", row[i].hash, 0})) {
 		cut(o, f, 9);
 		details(0, f, *f[4] && (p = strchr(sigs, *f[4])) ? p - sigs : 7);
@@ -260,6 +291,18 @@ static void tag(char *name)
 	free(o);
 }
 
+/* A press on the selected row changes no selection, so the release reads the diff of the first row again.
+ * A press that selects the row has read it already. */
+static gboolean down(GtkTreeView *v)
+{
+	GtkTreeModel *m;
+	GtkTreeIter it;
+	int i = 0;
+	if (gtk_tree_selection_get_selected(gtk_tree_view_get_selection(v), &m, &it)) gtk_tree_model_get(m, &it, 1, &i, -1);
+	again = i < 0;
+	return FALSE;
+}
+
 static gboolean chip(GtkTreeView *v, GdkEventButton *ev)
 {
 	GtkTreePath *p;
@@ -268,12 +311,12 @@ static gboolean chip(GtkTreeView *v, GdkEventButton *ev)
 	PangoLayout *l;
 	PangoAttrIterator *a;
 	char *m, *t;
-	int x, i, s, e, was = tagged;
+	int x, i, j, s, e, was = tagged;
 	if (ev->button != 1 || !gtk_tree_view_get_path_at_pos(v, ev->x, ev->y, &p, &c, &x, 0)) return FALSE;
 	tagged = 0;
 	gtk_tree_model_get_iter(filter, &it, p);
 	gtk_tree_path_free(p);
-	gtk_tree_model_get(filter, &it, 0, &m, -1);
+	gtk_tree_model_get(filter, &it, 0, &m, 1, &j, -1);
 	pango_layout_set_markup(l = gtk_widget_create_pango_layout(GTK_WIDGET(v), 0), m, -1);
 	if (c != graph && pango_layout_xy_to_index(l, (x - 4) * PANGO_SCALE, PANGO_SCALE, &i, &s)) {
 		a = pango_attr_list_get_iterator(pango_layout_get_attributes(l));
@@ -288,7 +331,7 @@ static gboolean chip(GtkTreeView *v, GdkEventButton *ev)
 	}
 	g_object_unref(l);
 	g_free(m);
-	if (was && !tagged) pick(gtk_tree_view_get_selection(v));
+	if ((was && !tagged) || (j < 0 && again)) pick(gtk_tree_view_get_selection(v));
 	return FALSE;
 }
 
@@ -298,6 +341,7 @@ static gboolean shown(GtkTreeModel *m, GtkTreeIter *it)
 	int i, r;
 	if (!query || !*query) return TRUE;
 	gtk_tree_model_get(m, it, 1, &i, -1);
+	if (i < 0) return !!strstr("uncommitted changes", query);
 	s = g_strdup_printf("%s %s %s %s", row[i].full, row[i].refs, row[i].subject, row[i].author);
 	r = !!strstr(f = g_utf8_casefold(s, -1), query);
 	g_free(s);
@@ -322,6 +366,7 @@ GtkWidget *log_view(GtkWidget **pane)
 	int k;
 	if (pane[0]) {
 		if (stale()) load();
+		else dirty();
 		return pane[0];
 	}
 	filter = gtk_tree_model_filter_new(GTK_TREE_MODEL(store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_INT)), 0);
@@ -337,6 +382,7 @@ GtkWidget *log_view(GtkWidget **pane)
 	gtk_tree_view_append_column(GTK_TREE_VIEW(list), col);
 	g_object_set(list, "headers-visible", FALSE, "fixed-height-mode", TRUE, NULL);
 	g_signal_connect(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), "changed", G_CALLBACK(pick), 0);
+	g_signal_connect(list, "button-press-event", G_CALLBACK(down), 0);
 	g_signal_connect(list, "button-release-event", G_CALLBACK(chip), 0);
 	v = g_object_new(GTK_TYPE_TEXT_VIEW, "name", "plain", "editable", FALSE, "monospace", TRUE, "wrap-mode", GTK_WRAP_WORD_CHAR, NULL);
 	info = gtk_text_view_get_buffer(GTK_TEXT_VIEW(v));
