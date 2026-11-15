@@ -25,6 +25,7 @@ static char *slurp(int fd)
 	return s;
 }
 
+/* The pipes close on exec: a job that a hook leaves in the background must not hold the output open. */
 int git(char **out, const char *in, char **argv)
 {
 	int i[2], o[2], st;
@@ -32,7 +33,7 @@ int git(char **out, const char *in, char **argv)
 	char *s, *t;
 	pid_t pid;
 	signal(SIGPIPE, SIG_IGN);
-	if (!e || pipe(i) || pipe(o)) {
+	if (!e || pipe2(i, O_CLOEXEC) || pipe2(o, O_CLOEXEC)) {
 		if (out) *out = strdup("cannot run git");
 		return -1;
 	}
@@ -40,8 +41,6 @@ int git(char **out, const char *in, char **argv)
 		dup2(i[0], 0);
 		dup2(o[1], 1);
 		dup2(fileno(e), 2);
-		close(i[1]);
-		close(o[0]);
 		setenv("GIT_LITERAL_PATHSPECS", "1", 1);
 		setenv("GIT_CONFIG_COUNT", "1", 1);
 		setenv("GIT_CONFIG_KEY_0", "core.quotePath", 1);
@@ -106,7 +105,7 @@ void status(void)
 		e = realloc(e, (*n + 1) * sizeof *e);
 		e[*n] = (Entry){p + 3, 0, p[0], p[1]};
 		p += strlen(p) + 1;
-		if (*e[*n].path && strchr("RC", e[*n].x)) {
+		if (*e[*n].path && (strchr("RC", e[*n].x) || strchr("RC", e[*n].y))) {
 			e[*n].orig = p;
 			p += strlen(p) + 1;
 		}
@@ -135,12 +134,13 @@ void status(void)
 	ent = e;
 }
 
+/* Each diff names its files as a/ and b/ and gives a submodule a plain diff, whatever the config of the user says. */
 char *diff(Entry *e, int cached)
 {
 	char *s, c[16];
 	if (e && !cached && e->y == '?') return diffs(2, e, 1);
 	snprintf(c, sizeof c, "-U%d", context);
-	git(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", c,
+	git(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", c,
 		cached ? "--cached" : "-p", cached && base ? base : "-p", "--", e ? e->path : 0, 0});
 	return s;
 }
@@ -174,61 +174,72 @@ char *diffs(int sec, Entry *e, int n)
 	return s;
 }
 
+/* A file with no chosen change leaves nothing in the patch: its header waits at hd for its first chosen hunk.
+ * To unstage or revert, a rename or a copy becomes a change of the new name, so a part of its changes does not undo it.
+ * git apply --recount counts the lines of a hunk, but it looks for the hunk at the start number of the side it makes.
+ * u is how far the unchosen lines above in the file move that number. */
 char *patch(const char *d, int from, int to, int rev)
 {
-	char *r, *b, *q = 0;
+	char *r, *b, *q;
 	size_t n, m;
-	int l = 0, h = -1, a = 0, c = 0, ob = 0, nb = 0, any = 0, chg = 0, drop = 0, top, ch;
-	const char *p = d, *e;
+	int l = 0, h = -1, chg = 0, drop = 0, ren = 0, u = 0, top, ch, i;
+	const char *p = d, *e, *s, *hd = d, *re = 0;
 	FILE *f = open_memstream(&r, &n), *g = 0;
 	for (;; p = e, l++) {
 		e = p + strcspn(p, "\n");
 		e += !!*e;
-		top = !strncmp(p, "diff --git ", 11);
-		if (top && l > from) e = p = "";
-		if (g && (top || !*p || !strncmp(p, "@@", 2))) {
+		top = !*p || !strncmp(p, "diff --", 7) || *p == '*';
+		if (g && (top || !strncmp(p, "@@", 2))) {
 			fclose(g);
 			g = 0;
 			if (chg) {
-				fprintf(f, "@@ -%d,%d +%d,%d%s", a, ob, c, nb, q);
+				for (; *hd != '@'; hd = s) {
+					s = hd + strcspn(hd, "\n") + 1;
+					if (rev && (!strncmp(hd, "rename ", 7) || !strncmp(hd, "copy ", 5))) ren = 1;
+					else if (ren && !strncmp(hd, "--- ", 4)) i = s[4] == '"', fprintf(f, "--- %sa%.*s", &"\""[!i], (int)strcspn(s, "\n") - 4 - i, s + 5 + i);
+					else fwrite(hd, 1, s - hd, f);
+				}
 				fputs(b, f);
-				any = 1;
 			}
-			free(q);
 			free(b);
 		}
+		if (top) h = -1, ren = u = 0, hd = p;
 		if (!*p) break;
-		if (top) rewind(f), h = -1;
 		ch = *p;
 		if (!strncmp(p, "@@", 2)) {
 			h = l;
-			a = strtol(p + 4, &q, 10);
-			q = strchr(q, '+');
-			c = strtol(q + 1, &q, 10);
-			if (*q == ',') strtol(q + 1, &q, 10);
-			q = strndup(q, e - q);
-			ob = nb = chg = drop = 0;
+			chg = drop = 0;
 			g = open_memstream(&b, &m);
-		} else if (h < 0) fwrite(p, 1, e - p, f);
+			i = strtol(p + 4, &q, 10);
+			fprintf(g, "@@ -%d +%d @@\n", i + rev * u, (int)strtol(strchr(q, '+'), 0, 10) - !rev * u);
+		} else if (h < 0) continue;
 		else if (ch == '\\') {
+			/* The marker is true only at the end of a side. A kept - line is not the end
+			 * when a + line after it stays as context, so it gets its newline back. */
+			for (s = e, i = l; rev && !drop && *s == '+'; s += strcspn(s, "\n"), s += !!*s) drop = ++i > (unsigned)to;
 			if (!drop) fwrite(p, 1, e - p, g);
+			if (re) {
+				fputc('+', g);
+				fwrite(re + 1, 1, p - re - 1, g);
+				re = 0;
+			}
 		} else if ((ch == '+' || ch == '-') && !(to < 0 ? h == from : l >= from && l <= to)) {
+			u += ch == '+' ? 1 : -1;
 			if (!(drop = ch == (rev ? '-' : '+'))) {
-				fputc(' ', g);
+				/* An unchosen - line with no newline cannot be context above a chosen + line:
+				 * it is removed and added again with a newline. */
+				re = !rev && *e == '\\' && from > l ? p : 0;
+				fputc(re ? '-' : ' ', g);
 				fwrite(p + 1, 1, e - p - 1, g);
-				ob++;
-				nb++;
 			}
 		} else {
 			fwrite(p, 1, e - p, g);
 			chg |= ch == '+' || ch == '-';
-			ob += ch != '+';
-			nb += ch != '-';
 			drop = 0;
 		}
 	}
 	fclose(f);
-	if (any) return r;
+	if (n) return r;
 	free(r);
 	return 0;
 }
@@ -236,7 +247,7 @@ char *patch(const char *d, int from, int to, int rev)
 int apply(char **out, const char *d, int from, int to, int mode)
 {
 	char *p = patch(d, from, to, mode > 0);
-	int r = p ? git(out, p, (char *[]){"git", "apply", mode > 1 ? "-R" : "--cached", mode ? "-R" : "--cached", "-", 0}) : (*out = 0, 0);
+	int r = p ? git(out, p, (char *[]){"git", "apply", "--recount", mode > 1 ? "-R" : "--cached", mode ? "-R" : "--cached", "-", 0}) : (*out = 0, 0);
 	free(p);
 	return r;
 }
@@ -291,17 +302,18 @@ static int split(char ***l, int n, char *p)
 
 int ignore(char **out, char *add, int sort)
 {
-	int fd = open(".gitignore", O_RDONLY), i, j, k, m, n;
-	char *s = fd < 0 ? strdup("") : slurp(fd), **l = 0;
-	FILE *f;
-	if (fd >= 0) close(fd);
+	FILE *f = fopen(".gitignore", "r");
+	int i, j, k, m, n;
+	char *s = f ? slurp(fileno(f)) : strdup(""), **l = 0;
+	if (f) fclose(f);
 	for (k = n = split(&l, 0, s); k && !*l[k - 1]; k--);
 	m = split(&l, n, add) - n;
 	memmove(l + k, l + n, m * sizeof *l);
 	for (i = k + m, n += m; i < n; i++) l[i] = "";
+	/* A block with a ! pattern keeps its order: there the order has a meaning */
 	for (i = 0; sort && i < n; i = j + 1) {
-		for (j = i; j < n && *l[j]; j++);
-		qsort(l + i, j - i, sizeof *l, by);
+		for (j = i, k = 0; j < n && *l[j]; j++) k |= *l[j] == '!';
+		if (!k) qsort(l + i, j - i, sizeof *l, by);
 	}
 	*out = 0;
 	if ((f = fopen(".gitignore", "w"))) {

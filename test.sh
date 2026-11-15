@@ -5,7 +5,8 @@ set -eu
 T=$(cd "$(dirname "$0")" && pwd)/wgit-test
 D=$(mktemp -d)
 trap 'rm -rf "$D"' EXIT
-cd "$D"
+mkdir "$D/main"
+cd "$D/main"
 git init -q
 git config user.name t
 git config user.email t@t
@@ -195,6 +196,111 @@ echo x > '"w".txt'
 echo x > 'x\y.txt'
 echo x > "$(printf 'n\nl.txt')"
 check 'odd names' 5 "$("$T" diffs 2 | grep -c '^@@')"
+
+# ---- No newline at the end ----
+
+mkdir ../fix && cd ../fix && git init -q && git config user.name t && git config user.email t@t
+printf 'a\nb\nlast' > n.txt
+seq 20 > a.txt
+seq 101 120 > q.txt
+git add .
+git commit -qm init
+printf 'a\nb\nlast\nnew1\n' > n.txt
+"$T" stage n.txt "$(at '' n.txt '^+new1')" "$(at '' n.txt '^+new1')"
+check 'stage a line after an end without newline' "$(printf 'a\nb\nlast\nnew1\n.')" "$(git show :n.txt; echo .)"
+git reset -q --hard
+printf 'a\nb\nnewlast' > n.txt
+"$T" discard n.txt "$(at '' n.txt '^-last')" "$(at '' n.txt '^-last')"
+check 'revert a line before an end without newline' "$(printf 'a\nb\nlast\nnewlast.')" "$(cat n.txt; echo .)"
+git reset -q --hard
+
+# ---- Odd diffs ----
+
+lno() {
+	git diff | grep -n -- "$1" | awk -F: '{print $1 - 1}'
+}
+
+sed -i 's/^2$/two/' a.txt
+sed -i 's/^103$/three/; s/^118$/eighteen/' q.txt
+"$T" stage :1 "$(lno '^-2$')" "$(lno '^+three')"
+check 'lines of two files' "$(printf -- '-2\n+two\n-103\n+three')" "$(changes --cached)"
+git reset -q --hard
+git mv q.txt r.txt
+sed -i 's/^103$/three/; s/^118$/eighteen/' r.txt
+git add r.txt
+"$T" unstage :0 "$(git diff --cached | nth 2)"
+check 'unstage hunk of a rename' "$(printf -- 'RM r.txt < q.txt\n-103\n+three')" "$("$T"; changes --cached)"
+git reset -q --hard
+mv a.txt z.txt
+git add -N z.txt
+check 'rename in the work tree' ' R z.txt < a.txt' "$("$T")"
+git reset -q --hard
+rm -f z.txt
+git config diff.noprefix true
+git config diff.mnemonicPrefix true
+sed -i 's/^2$/two/' a.txt
+"$T" stage a.txt "$(at '' a.txt '^@@')"
+check 'prefix config' "$(printf -- '-2\n+two')" "$(changes --cached)"
+git config --unset diff.noprefix
+git config --unset diff.mnemonicPrefix
+git reset -q --hard
+git init -q sub
+git -C sub -c user.name=t -c user.email=t@t commit -q --allow-empty -m one
+git -c protocol.file.allow=always submodule --quiet add ./sub > /dev/null 2>&1
+git commit -qm sub
+git -C sub -c user.name=t -c user.email=t@t commit -q --allow-empty -m two
+git config diff.submodule log
+sed -i 's/^2$/two/' a.txt
+"$T" stage :1 "$(git diff --submodule=short | nth 1)" || :
+check 'hunk above a submodule' "$(printf -- '-2\n+two')" "$(changes --cached -- a.txt)"
+git config --unset diff.submodule
+git -C sub reset -q --hard HEAD~1
+git reset -q --hard
+mv a.txt z.txt
+sed -i 's/^2$/two/' z.txt
+git add -N z.txt
+"$T" stage :1 "$(git diff | nth 1)" || :
+check 'stage hunk of a work tree rename' "$(printf -- 'R  z.txt < a.txt\n-2\n+two')" "$("$T" | grep z.txt; changes --cached)"
+git reset -q --hard
+rm -f z.txt
+for i in 1 2 3 4 5 6 7 8 9 10 11 12; do printf 'a\nb\nc\nd\n'; done > f.txt
+git add f.txt
+git commit -qm blocks
+{ printf 'w\nx\ny\nz\n'; sed '18s/b/B/' f.txt; } > g.txt
+mv g.txt f.txt
+"$T" stage f.txt "$(at '' f.txt '^@@' 2)"
+check 'stage hunk in repeated text' '@@ -18 +18 @@' "$(git diff --cached -U0 | grep '^@@' | cut -d' ' -f1-4)"
+git reset -q
+"$T" discard f.txt "$(at '' f.txt '^@@' 2)"
+check 'revert hunk in repeated text' '@@ -0,0 +1,4 @@' "$(git diff -U0 | grep '^@@' | cut -d' ' -f1-4)"
+git reset -q --hard
+printf '*.log\n!keep.log\n' > .gitignore
+touch x.tmp
+"$T" ignore-sorted x.tmp
+check 'sort keeps a block with !' "$(printf '*.log\n!keep.log\n/x.tmp')" "$(cat .gitignore)"
+rm .gitignore x.tmp
+printf '#!/bin/sh\nsleep 9 &\n' > .git/hooks/post-commit
+chmod +x .git/hooks/post-commit
+echo x >> a.txt
+"$T" add a.txt
+S=$(date +%s)
+"$T" commit hook
+check 'hook with a background job' 1 "$(($(date +%s) - S < 6))"
+rm .git/hooks/post-commit
+git checkout -q -b side
+echo side > u.txt
+git add u.txt
+git commit -qm side
+git checkout -q -
+echo main > u.txt
+git add u.txt
+git commit -qm main
+git merge -q side > /dev/null 2>&1 || :
+sed -i 's/^2$/two/' a.txt
+"$T" stage :1 "$(git diff | nth 2)" || :
+check 'stage hunk next to an unmerged file' "$(printf -- '-2\n+two')" "$(changes --cached -- a.txt)"
+"$T" unstage :0 "$(git diff --cached | nth 1)" || :
+check 'unstage hunk next to an unmerged file' '' "$(changes --cached -- a.txt)"
 
 # ---- Stat ----
 
