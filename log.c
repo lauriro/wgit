@@ -1,5 +1,6 @@
 
 #include <gtk/gtk.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "diff-view.h"
@@ -37,24 +38,27 @@ static const char *kind[][2] = {
 
 static char *line(Row *r)
 {
-	GString *s = g_string_new(0);
-	char *p, *e, *t;
+	FILE *s;
+	char *p, *e, *t, *m;
+	size_t n;
 	int k, l;
-	g_string_append_printf(s, "<span foreground=\"#c55\" font_family=\"monospace\">%s</span> ", r->hash);
+	s = open_memstream(&m, &n);
+	fprintf(s, "<span foreground=\"#c55\" font_family=\"monospace\">%s</span> ", r->hash);
 	for (p = r->refs; *p; p = e + 2 * !!*e) {
 		e = p + strcspn(p, ",");
 		for (k = 0; k < 5 && strncmp(p, kind[k][0], l = strlen(kind[k][0])); k++);
 		if (k == 5 || (k == 2 && !strncmp(e - 5, "/HEAD", 5))) continue;
 		if (k == 4) l = 0;
 		t = g_markup_escape_text(p + l, e - p - l);
-		g_string_append_printf(s, "<span background=\"%s\" foreground=\"#fff\"> %s </span> ", kind[k][1], t);
+		fprintf(s, "<span background=\"%s\" foreground=\"#fff\"> %s </span> ", kind[k][1], t);
 		g_free(t);
 	}
 	k = *r->subject == '!';
 	t = g_markup_printf_escaped("%s  <span foreground=\"#4a4\">%s</span>  <span foreground=\"#39a\">%.16s</span>", r->subject + k, r->author, r->date);
-	g_string_append_printf(s, "%s%s", k ? "&#x200a;<span foreground=\"#e33\" weight=\"heavy\" size=\"125%\" line_height=\"0.6\" rise=\"-0.75pt\">!</span>" : "", t);
+	fprintf(s, "%s%s", k ? "&#x200a;<span foreground=\"#e33\" weight=\"heavy\" size=\"125%\" line_height=\"0.6\" rise=\"-0.75pt\">!</span>" : "", t);
 	g_free(t);
-	return g_string_free(s, FALSE);
+	fclose(s);
+	return m;
 }
 static const char shape[] = "|/\\_-";
 static const double geom[][4] = {{0, 0, 0, 1}, {1, 0, -1, 1}, {-1, 0, 1, 1}, {-1, 1, 1, 1}, {-1, .5, 1, .5}};
@@ -84,7 +88,7 @@ static void fill(int from)
 		if (!row[i].hash) continue;
 		m = line(row + i);
 		gtk_list_store_insert_with_values(store, 0, -1, 0, m, 1, i, -1);
-		g_free(m);
+		free(m);
 		ncom++;
 	}
 	g_object_set(graph, "fixed-width", 2 * PAD + cells * W, NULL);
@@ -181,7 +185,7 @@ static gboolean paint(GtkTreeView *v, cairo_t *cr)
 		}
 		cairo_fill(cr);
 	}
-	if (!pending && ncom >= limit && *gtk_tree_path_get_indices(b) + 1 >= gtk_tree_model_iter_n_children(filter, 0))
+	if (!pending && ncom >= limit && *gtk_tree_path_get_indices(b) + 1 >= ncom)
 		pending = g_idle_add(more, 0);
 	gtk_tree_path_free(a);
 	gtk_tree_path_free(b);
@@ -231,11 +235,12 @@ static void pick(GtkTreeSelection *s)
 	if (!gtk_tree_selection_get_selected(s, &m, &it)) return;
 	gtk_tree_model_get(m, &it, 1, &i, -1);
 	if (!git(&o, 0, (char *[]){"git", "show", "--format=%H%x00%P%x00%an <%ae>%x00%ai%x00%G?%x00%GS%x00%B%x00%N%x00",
-		"--no-color", "--no-ext-diff", "--diff-merges=first-parent", row[i].hash, 0})) {
+		"--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", "--diff-merges=first-parent", row[i].hash, 0})) {
 		cut(o, f, 9);
 		details(0, f, *f[4] && (p = strchr(sigs, *f[4])) ? p - sigs : 7);
 		if (*g_strchomp(f[7])) put("\nNotes\n", -1, "dim"), put(f[7], -1, "note");
-		diff_files(dv, f[8] + strspn(f[8], "\n"));
+		while (*f[8] == '\n') f[8]++;
+		diff_files(dv, f[8]);
 	}
 	free(o);
 }
@@ -293,7 +298,7 @@ static gboolean shown(GtkTreeModel *m, GtkTreeIter *it)
 	int i, r;
 	if (!query || !*query) return TRUE;
 	gtk_tree_model_get(m, it, 1, &i, -1);
-	s = g_strdup_printf("%s %s %s %s", row[i].hash, row[i].refs, row[i].subject, row[i].author);
+	s = g_strdup_printf("%s %s %s %s", row[i].full, row[i].refs, row[i].subject, row[i].author);
 	r = !!strstr(f = g_utf8_casefold(s, -1), query);
 	g_free(s);
 	g_free(f);
