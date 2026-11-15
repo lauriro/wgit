@@ -45,14 +45,34 @@ Why some things are as they are:
 - `patch()` keeps the lines in the chosen range.
   For staging, an unchosen `+` line is dropped and an unchosen `-` line becomes context;
   for unstaging and revert (applied with `-R`) the two rules swap.
-  The hunk header counts are recomputed, the start numbers are kept.
   `to < 0` means the whole hunk whose header is at line `from`.
+  A range can span files; a file with no chosen change is not in the patch.
+  `git apply --recount` counts the lines of each hunk, so `patch()` writes only the start numbers.
+  git looks for a hunk at the start number of the side it makes,
+  so `patch()` moves that number by the unchosen lines above it in the file.
+  Without this a hunk in repeated text went to the wrong place.
+- A `\ No newline at end of file` marker is true only at the end of a side.
+  For staging, an unchosen `-` line that has the marker and is above a chosen `+` line
+  is removed and added again with a newline.
+  For unstaging and revert, a chosen `-` line loses the marker when a `+` line after it stays as context.
+- For unstaging and revert, `patch()` makes a rename or a copy a change of the new name
+  (it drops the `rename` lines and writes `--- a/<new name>`), so a part of the changes does not undo the rename.
+- Each diff gets `--default-prefix` and `--submodule=short` (git 2.41),
+  so `diff.noprefix`, `diff.mnemonicPrefix` and `diff.submodule` of the user do not change what `patch()` and the titles read.
+- The pipes to git are `O_CLOEXEC`: else a job that a hook leaves in the background holds the output open
+  and the window waits for it.
 - The diff view replaces the header lines of each file with a title line,
   so a map from view lines to diff lines keeps clicks and selections on diff lines.
 - The log checks the signature of the selected commit only, as `%G?` for all rows is slow.
   One `git show` gives the details and the diff: the format ends with a NUL and the diff comes after it.
 - The log loads 10,000 commits at a time and adds only the new rows, so selection and scroll stay.
   It reloads on a switch to the log view only when the refs changed (`stale()`, needs git 2.45).
+- While a tracked file has changes, the first row of the log is `Uncommitted changes`, with the index -1 in the store.
+  Its diff is `git diff HEAD`: staged and unstaged together, no untracked files.
+  Nothing of it is kept, by the user's choice: a click on the row runs one `git diff`, so a click is the reload.
+  The press handler `down()` notes if the row was selected already, so a click that selects it does not read twice.
+  A switch to the log view runs only one `git status --porcelain -uno`, to add or remove the row;
+  the diff of a selected row stays as it was until a click.
 - The graph column is empty; `paint()` draws the graph with cairo after GTK draws the rows,
   mirrored so the first column is next to the hash.
   The column is at least four cells wide, the width of two branches, so a new branch does not move the rows.
@@ -85,7 +105,7 @@ podman build -t wgit-build .
 podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build make wgit test
 ```
 
-`make test` builds `wgit-test` and runs `test.sh`; the last line is `48 passed, 0 failed`.
+`make test` builds `wgit-test` and runs `test.sh`; the last line is `62 passed, 0 failed`.
 The test names are in `test.sh`, the commands of `wgit-test` in `test.c`.
 
 Size:
@@ -144,6 +164,12 @@ and start a small GDBus mock that owns `org.freedesktop.portal.Desktop` like tar
   so the line selection after it points at the wrong diff lines.
 - Unstaging part of a newly added file fails: git will not remove only part of a new file.
   Unstaging the whole file works.
+  Staging part of a deleted file fails the same way.
+- Revert on a rename in the work tree (` R`, made with `git add -N`) leaves the new name as an empty file
+  and does not bring the old name back.
+- A file name that git quotes (a tab, a quote, a backslash) gets a wrong title in the diff view,
+  so the list and the diff do not follow each other for that file.
+- A selection of lines that spans a closed file takes the changed lines of that file also.
 
 ## The user's rules
 
