@@ -432,25 +432,32 @@ static char *extension(char *path)
 /* Sections from one log: a heading with its total and lines, then its rows ranked by count, each with its share */
 char *stats(int days, long now, const char *path)
 {
-	static const char *const head[] = { "Commits: %ld", "Lines changed by file type: %ld", "Most frequently changed files (top 20)" };
+	static const char *const head[] = { "Commits: %ld", "Lines changed by file type: %ld", "Most frequently changed files (top 20)",
+		"Files added/deleted: %ld" };
 	/* How many rows a section shows, 0 for all */
-	static const int most[] = { 0, 0, 20 };
+	static const int most[] = { 0, 0, 20, 0 };
 	enum { N = sizeof head / sizeof *head };
 	Tab t[N] = {{0}};
 	Stat *author = 0, *v;
 	char *s, *o, *p, *q, *e, since[32];
 	time_t n = now;
-	long add = 0, del = 0, a, d, nc = 0, off = localtime(&n)->tm_gmtoff;
+	long add = 0, del = 0, fa = 0, fd = 0, a, d, nc = 0, off = localtime(&n)->tm_gmtoff;
 	int i, k;
 	size_t len;
 	FILE *f = open_memstream(&o, &len);
 	snprintf(since, sizeof since, "--since=%ld", ((now + off) / 86400 - days + 1) * 86400 - off);
-	if (git(&s, 0, (char *[]){"git", "log", "--numstat", "-z", "--no-renames", "--no-ext-diff", "--no-textconv",
+	if (git(&s, 0, (char *[]){"git", "log", "--raw", "--numstat", "-z", "--no-renames", "--no-ext-diff", "--no-textconv",
 		"--format=%x01%aN <%aE>", days ? since : "--no-renames", "--", (char *)path, 0})) *s = 0;
 	for (p = s; *p; p = e) {
 		e = p + strlen(p) + 1;
 		while (*p == '\n') p++;
 		if (*p == 1) nc++, (author = get(t, p + 1))->n++;
+		else if (*p == ':') {
+			/* A raw entry ends in its status, its path is the next field: A added, D deleted */
+			a = p[strlen(p) - 1] == 'A', d = p[strlen(p) - 1] == 'D';
+			if (a || d) v = get(t + 3, extension(e)), v->n++, v->add += a, v->del += d, fa += a, fd += d;
+			e += strlen(e) + 1;
+		}
 		else if (author && (q = strchr(p, '\t'))) {
 			/* added, removed and the path; a binary file's counts are - */
 			a = strtol(p, 0, 10), d = strtol(q + 1, 0, 10), q = strchr(q + 1, '\t') + 1;
@@ -459,7 +466,7 @@ char *stats(int days, long now, const char *path)
 			if (a || d) v = get(t + 1, extension(q)), v->n += a + d, v->add += a, v->del += d;
 		}
 	}
-	long total[N] = { nc, add + del, nc }, plus[N] = { add, add }, minus[N] = { del, del };
+	long total[N] = { nc, add + del, nc, fa + fd }, plus[N] = { add, add, 0, fa }, minus[N] = { del, del, 0, fd };
 	for (k = 0; k < N; k++) {
 		if (k) fputc('\n', f);
 		fprintf(f, head[k], total[k]);

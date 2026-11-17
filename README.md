@@ -110,6 +110,8 @@ the graph of all branches at the left, the diff of the selected commit at the ri
   is `(no extension)`.
 - The 20 files changed most often, each with the share of the commits that changed it and its lines:
   a commit changes many files, so the shares add up to more than 100%.
+- Files added/deleted counts the files added and deleted of each extension, empty and binary ones too;
+  a rename is a deletion and an addition.
 - `All` reads the whole history in one git run, so a large repo takes some time.
 
 ## Contributing
