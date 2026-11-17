@@ -329,6 +329,18 @@ git reset -q HEAD -- new.txt
 "$T" discard new.txt 4 || :
 check 'revert hunk with textconv' "$(printf 'one\ntwo\nthree')" "$(cat new.txt)"
 
+# ---- Alternate index ----
+
+mkdir ../index && cd ../index && git init -q && git config user.name t && git config user.email t@t
+echo tracked > tracked.txt
+git add tracked.txt
+git commit -qm init
+cp .git/index .git/alternate
+echo untracked > new.txt
+GIT_INDEX_FILE="$PWD/.git/alternate" "$T" stage new.txt 5
+check 'untracked hunk uses alternate index' 'new.txt' "$(GIT_INDEX_FILE="$PWD/.git/alternate" git diff --cached --name-only)"
+check 'untracked diff leaves default index alone' '' "$(git diff --cached --name-only)"
+
 # ---- Stat ----
 
 mkdir ../stat && cd ../stat && git init -q && git config user.name t && git config user.email t@t

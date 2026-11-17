@@ -26,7 +26,7 @@ static char *slurp(int fd)
 }
 
 /* The pipes close on exec: a job that a hook leaves in the background must not hold the output open. */
-int git(char **out, const char *in, char **argv)
+static int run(char **out, const char *in, char **argv, const char *index)
 {
 	int i[2], o[2], st;
 	FILE *e = tmpfile();
@@ -41,6 +41,7 @@ int git(char **out, const char *in, char **argv)
 		dup2(i[0], 0);
 		dup2(o[1], 1);
 		dup2(fileno(e), 2);
+		if (index) setenv("GIT_INDEX_FILE", index, 1);
 		setenv("GIT_LITERAL_PATHSPECS", "1", 1);
 		setenv("GIT_CONFIG_COUNT", "1", 1);
 		setenv("GIT_CONFIG_KEY_0", "core.quotePath", 1);
@@ -67,6 +68,11 @@ int git(char **out, const char *in, char **argv)
 	if (out) *out = s;
 	else free(s);
 	return st;
+}
+
+int git(char **out, const char *in, char **argv)
+{
+	return run(out, in, argv, 0);
 }
 
 char *base;
@@ -136,14 +142,18 @@ void status(void)
 }
 
 /* Each diff names its files as a/ and b/ and gives a submodule a plain diff, whatever the config of the user says. */
-char *diff(Entry *e, int cached)
+static char *read_diff(Entry *e, int cached, const char *index)
 {
 	char *s, c[16];
-	if (e && !cached && e->y == '?') return diffs(2, e, 1);
 	snprintf(c, sizeof c, "-U%d", context);
-	git(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--default-prefix", "--submodule=short", c,
-		cached ? "--cached" : "-p", cached && base ? base : "-p", "--", e ? e->path : 0, 0});
+	run(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--default-prefix", "--submodule=short", c,
+		cached ? "--cached" : "-p", cached && base ? base : "-p", "--", e ? e->path : 0, 0}, index);
 	return s;
+}
+
+char *diff(Entry *e, int cached)
+{
+	return e && !cached && e->y == '?' ? diffs(2, e, 1) : read_diff(e, cached, 0);
 }
 
 /* Untracked files go into a temporary index as intent-to-add, so one git diff shows them all as new files. */
@@ -165,11 +175,9 @@ char *diffs(int sec, Entry *e, int n)
 		fputs("\"\n", f);
 	}
 	fclose(f);
-	setenv("GIT_INDEX_FILE", x, 1);
-	git(0, s, (char *[]){"git", "add", "-N", "--pathspec-from-file=-", 0});
+	run(0, s, (char *[]){"git", "add", "-N", "--pathspec-from-file=-", 0}, x);
 	free(s);
-	s = diff(0, 0);
-	unsetenv("GIT_INDEX_FILE");
+	s = read_diff(0, 0, x);
 	remove(x);
 	remove(t);
 	return s;
