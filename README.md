@@ -15,7 +15,7 @@ $ make
 $ ./wgit
 ```
 
-wgit is one window with three views, and the `[ Log | Commit | Stat ]` switcher at the top right switches between them.
+wgit is one window with three views, and the `[ Commit | Log | Stat ]` switcher at the top right switches between them.
 `wgit` alone opens the commit view when the repo has changes, else the log view.
 
 `wgit commit` (or `wgit c`, any unique prefix) opens the commit view, like gitg's:

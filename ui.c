@@ -9,7 +9,6 @@ GtkWidget *win;
 static GtkWidget *stack, *page[3], *pane[6], *(*view[])(GtkWidget **) = {commit_view, log_view, stat_view};
 static const char *title[] = {"Commit", "Log", "Stat"};
 static int geo[] = {1000, 700, 300, 0, 450, 0, 250, 0};
-static const char order[] = {1, 0, 2};
 static char *conf;
 
 GtkWidget *scroll(GtkWidget *w)
@@ -143,7 +142,7 @@ int app(const char *path, int v)
 	FILE *f;
 	GtkCssProvider *css;
 	char *top = repo(path);
-	int i, k;
+	int i;
 	if (!top) return fputs("wgit: not a git repository\n", stderr), 1;
 	if (v < 0) status(), v = !nent;
 	setenv("NO_AT_BRIDGE", "1", 0);
@@ -159,9 +158,8 @@ int app(const char *path, int v)
 	win = g_object_new(GTK_TYPE_WINDOW, "title", top, "default-width", geo[0], "default-height", geo[1], NULL);
 	gtk_container_add(GTK_CONTAINER(win), stack = gtk_stack_new());
 	for (i = 0; i < 3; i++) {
-		k = order[i];
-		gtk_widget_show_all(page[k] = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
-		gtk_stack_add_titled(GTK_STACK(stack), page[k], title[k], title[k]);
+		gtk_widget_show_all(page[i] = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
+		gtk_stack_add_titled(GTK_STACK(stack), page[i], title[i], title[i]);
 	}
 	g_object_set(stack, "visible-child", page[v], NULL);
 	show(v);

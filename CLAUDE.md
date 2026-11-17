@@ -11,7 +11,7 @@ a Debian testing (glibc) desktop with the dwl compositor.
 GTK 3.24 is already in the desktop's stack image, so wgit uses GTK 3 only:
 no GTK 4, no libadwaita, no other libraries.
 
-- One window with three views; a `[ Log | Commit | Stat ]` switcher at the top right switches them.
+- One window with three views; a `[ Commit | Log | Stat ]` switcher at the top right switches them.
   `wgit` alone opens the commit view if `git status` lists anything, else the log view.
 - `wgit c[ommit] [path]` opens the commit view, like gitg's.
   `wgit l[og] [path]` opens the log view, gitk-like.
