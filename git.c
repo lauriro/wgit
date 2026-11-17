@@ -332,6 +332,20 @@ int commit(char **out, const char *msg, int amend)
 	return git(out, msg, (char *[]){"git", "commit", "-q", "-F", "-", amend ? "--amend" : 0, 0});
 }
 
+/* The commits at the edge of a shallow clone, one full hash a line: their parents are not here, so git shows each
+ * as a root, its whole tree added */
+static char *edges(void)
+{
+	char *p, *s = 0;
+	FILE *f;
+	if (!git(&p, 0, (char *[]){"git", "rev-parse", "--git-path", "shallow", 0}) && (f = fopen(strtok(p, "\n"), "r"))) {
+		s = slurp(fileno(f));
+		fclose(f);
+	}
+	free(p);
+	return s;
+}
+
 Row *history(int *n, int max)
 {
 	static char *s;
@@ -352,6 +366,8 @@ Row *history(int *n, int max)
 	for (i = 0; i < m; i++) l[i] += strcspn(l[i], " ") + 1;
 	qsort(l, m, sizeof *l, by);
 	for (i = 0; m && i < *n; i++) r[i].note = r[i].full && bsearch(&r[i].full, l, m, sizeof *l, by);
+	free(t);
+	for (t = edges(), i = 0; t && i < *n; i++) r[i].edge = r[i].full && strstr(t, r[i].full);
 	free(l);
 	free(t);
 	return r;

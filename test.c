@@ -12,7 +12,7 @@ int main(int argc, char **argv)
 	Entry *e, **f = calloc(argc, sizeof *f);
 	if (argc > 1 && argc < 4 && !strcmp(argv[1], "log")) {
 		Row *w = history(&n, argc > 2 ? atoi(argv[2]) : 1 << 30);
-		for (i = 0; i < n; i++) printf("%s\t%s\t%s\n", w[i].graph, w[i].hash ? w[i].refs : "", w[i].hash ? w[i].subject : "");
+		for (i = 0; i < n; i++) printf("%s\t%s\t%s%s\n", w[i].graph, w[i].hash ? w[i].refs : "", w[i].hash ? w[i].subject : "", w[i].edge ? " (edge)" : "");
 		return 0;
 	}
 	if (argc == 2 && !strcmp(argv[1], "notes")) {

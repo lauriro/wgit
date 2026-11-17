@@ -345,6 +345,15 @@ GIT_INDEX_FILE="$PWD/.git/alternate" "$T" stage new.txt 5
 check 'untracked hunk uses alternate index' 'new.txt' "$(GIT_INDEX_FILE="$PWD/.git/alternate" git diff --cached --name-only)"
 check 'untracked diff leaves default index alone' '' "$(git diff --cached --name-only)"
 
+# ---- Shallow clone ----
+
+mkdir ../deep && cd ../deep && git init -q && git config user.name t && git config user.email t@t
+echo 1 > a.txt && git add a.txt && git commit -qm one
+echo 2 > a.txt && git commit -qam two
+check 'root of a whole clone is no edge' 0 "$("$T" log | grep -c '(edge)')"
+git clone -q --depth 1 "file://$PWD" ../shallow && cd ../shallow
+check 'edge of a shallow clone' 'two (edge)' "$("$T" log | cut -f3)"
+
 # ---- Stat ----
 
 mkdir ../stat && cd ../stat && git init -q && git config user.name t && git config user.email t@t

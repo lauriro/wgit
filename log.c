@@ -208,6 +208,8 @@ static gboolean paint(GtkTreeView *v, cairo_t *cr)
 			colour(cr, k);
 			cairo_arc(cr, col(k), cy, 3.5, 0, 2 * G_PI);
 		}
+		/* History goes on below the edge of a shallow clone, not fetched: three dots under it */
+		if (row[i].edge) for (j = 1; j <= 3; j++) cairo_new_sub_path(cr), cairo_arc(cr, col(k), cy + 3.5 + 4 * j, 1.2, 0, 2 * G_PI);
 		cairo_fill(cr);
 	}
 	if (!pending && ncom >= limit && *gtk_tree_path_get_indices(b) + 1 >= ncom)
@@ -266,12 +268,16 @@ static void pick(GtkTreeSelection *s)
 		git(&o, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", "HEAD", 0});
 		diff_files(dv, o);
 	} else if (!git(&o, 0, (char *[]){"git", "show", "--format=%H%x00%P%x00%an <%ae>%x00%ai%x00%G?%x00%GS%x00%B%x00%N%x00",
-		"--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", "--diff-merges=first-parent", row[i].hash, 0})) {
+		"--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", "--diff-merges=first-parent",
+		/* The edge of a shallow clone would show its whole tree as added: in Linux that is 1.7 GB */
+		row[i].edge ? "--no-patch" : "--patch", row[i].hash, 0})) {
 		cut(o, f, 9);
 		details(0, f, *f[4] && (p = strchr(sigs, *f[4])) ? p - sigs : 7);
 		if (*g_strchomp(f[7])) put("\nNotes\n", -1, "dim"), put(f[7], -1, "note");
 		while (*f[8] == '\n') f[8]++;
-		diff_files(dv, f[8]);
+		/* An edge commit has no diff: the diff view says why */
+		diff_files(dv, row[i].edge ? "The edge of a shallow clone: its parent is not here, so what it changed is not known.\n"
+			"git fetch --deepen=<commits> brings older history.\n" : f[8]);
 	}
 	free(o);
 }
