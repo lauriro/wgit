@@ -196,6 +196,10 @@ echo x > '"w".txt'
 echo x > 'x\y.txt'
 echo x > "$(printf 'n\nl.txt')"
 check 'odd names' 5 "$("$T" diffs 2 | grep -c '^@@')"
+"$T" stage :2 0 10000
+check 'stage all odd names' '' "$(git ls-files --others --exclude-standard)"
+check 'newline filename content' x "$(git show ":$(printf 'n\nl.txt')")"
+check 'backslash filename content' x "$(git show ':x\y.txt')"
 
 # ---- No newline at the end ----
 

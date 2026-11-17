@@ -26,7 +26,7 @@ static char *slurp(int fd)
 }
 
 /* The pipes close on exec: a job that a hook leaves in the background must not hold the output open. */
-static int run(char **out, const char *in, char **argv, const char *index)
+static int run(char **out, const char *in, size_t len, char **argv, const char *index)
 {
 	int i[2], o[2], st;
 	FILE *e = tmpfile();
@@ -51,7 +51,7 @@ static int run(char **out, const char *in, char **argv, const char *index)
 	}
 	close(i[0]);
 	close(o[1]);
-	if (in) write(i[1], in, strlen(in));
+	if (in) write(i[1], in, len);
 	close(i[1]);
 	s = slurp(o[0]);
 	close(o[0]);
@@ -72,7 +72,7 @@ static int run(char **out, const char *in, char **argv, const char *index)
 
 int git(char **out, const char *in, char **argv)
 {
-	return run(out, in, argv, 0);
+	return run(out, in, in ? strlen(in) : 0, argv, 0);
 }
 
 char *base;
@@ -146,7 +146,7 @@ static char *read_diff(Entry *e, int cached, const char *index)
 {
 	char *s, c[16];
 	snprintf(c, sizeof c, "-U%d", context);
-	run(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--default-prefix", "--submodule=short", c,
+	run(&s, 0, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--default-prefix", "--submodule=short", c,
 		cached ? "--cached" : "-p", cached && base ? base : "-p", "--", e ? e->path : 0, 0}, index);
 	return s;
 }
@@ -159,23 +159,16 @@ char *diff(Entry *e, int cached)
 /* Untracked files go into a temporary index as intent-to-add, so one git diff shows them all as new files. */
 char *diffs(int sec, Entry *e, int n)
 {
-	char t[] = "/tmp/wgit-XXXXXX", x[24], *s, *p;
+	char t[] = "/tmp/wgit-XXXXXX", x[24], *s;
 	size_t len;
 	FILE *f;
 	if (sec < 2) return diff(0, !sec);
 	mkdtemp(t);
 	snprintf(x, sizeof x, "%s/i", t);
 	f = open_memstream(&s, &len);
-	for (; n--; e++) if (e->y == '?') {
-		fputc('"', f);
-		for (p = e->path; *p; p++) {
-			if (strchr("\"\\\n", *p)) fputc('\\', f);
-			fputc(*p == '\n' ? 'n' : *p, f);
-		}
-		fputs("\"\n", f);
-	}
+	for (; n--; e++) if (e->y == '?') fwrite(e->path, 1, strlen(e->path) + 1, f);
 	fclose(f);
-	run(0, s, (char *[]){"git", "add", "-N", "--pathspec-from-file=-", 0}, x);
+	run(0, s, len, (char *[]){"git", "add", "-N", "--pathspec-from-file=-", "--pathspec-file-nul", 0}, x);
 	free(s);
 	s = read_diff(0, 0, x);
 	remove(x);
