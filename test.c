@@ -28,6 +28,11 @@ int main(int argc, char **argv)
 		}
 		return 0;
 	}
+	if (argc == 2 && !strcmp(argv[1], "lanes")) {
+		Row *w = history(&n, 1 << 30);
+		for (i = 0; i < n; i++, puts("")) for (k = 0; w[i].graph[k]; k++) putchar(strchr("* ", w[i].graph[k]) ? w[i].graph[k] : '0' + lane(w, i, k));
+		return 0;
+	}
 	if (argc == 2 && !strcmp(argv[1], "draft")) {
 		if ((o = draft())) fputs(o, stdout);
 		return 0;

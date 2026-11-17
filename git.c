@@ -491,6 +491,14 @@ int joins(const char *g, int k, int down)
 	return (k < n && (g[k] == '|' || g[k] == '*')) || (k > 0 && k <= n && g[k - 1] == "\\/"[down]) || (k + 1 < n && g[k + 1] == "/\\"[down]);
 }
 
+/* A '/' under a '/' two cells to the right goes on with the same line, so it takes the colour of the lane where that line starts */
+int lane(const Row *r, int j, int k)
+{
+	int c = r[j].graph[k];
+	for (; c == '/' && j > 0 && strlen(r[j - 1].graph) > k + 2 && r[j - 1].graph[k + 2] == c; j--) k += 2;
+	return k + (c != '|');
+}
+
 char *repo(const char *path)
 {
 	char *top;

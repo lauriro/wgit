@@ -169,6 +169,16 @@ check 'log joins' "$(printf '%s\n' 'four -d' 'dev1 -d' 'merge ud' 'two ud' 'thre
 check 'log notes' three "$("$T" notes)"
 check 'log limit' "$(printf '%s\t%s\t%s\n' '* ' 'HEAD -> refs/heads/main' four '| * ' refs/heads/dev dev1 '|/  ' '' '')" "$("$T" log 2)"
 
+mkdir ../lanes && cd ../lanes && git init -q -b main && git config user.name t && git config user.email t@t
+ci() { GIT_COMMITTER_DATE="2030-01-0${2}T00:00:00" git commit -q --allow-empty -m "$1"; }
+ci one 1
+git checkout -q -b x && ci x1 4
+git checkout -q main && ci two 2
+git checkout -q -b a && ci a1 3
+git checkout -q main && ci three 5
+check 'log lane of a line across lanes' "$(printf '%s\n' '* ' '0 * ' '0 2 * ' '0 24  ' '042   ' '* 2 ' '02  ' '* ')" "$("$T" lanes)"
+cd ../log
+
 # ---- Section diffs ----
 
 nth() {

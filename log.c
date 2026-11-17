@@ -164,7 +164,7 @@ static void span(cairo_t *cr, int a, int b, double ya, double h)
 			if (j == a ? joins(row[a + 1].graph, k, 1) : joins(row[b - 1].graph, k, 0)) stroke(cr, k, c, y0 + (j + t0) * sc, c, y0 + (j + t1) * sc);
 		} else if ((s = strchr(shape, p[k]))) {
 			g = geom[s - shape];
-			if (g[1] != g[3]) stroke(cr, k + (p[k] != '|'), c - (g[0] + (g[2] - g[0]) * t0) * W, y0 + (j + t0) * sc,
+			if (g[1] != g[3]) stroke(cr, lane(row, j, k), c - (g[0] + (g[2] - g[0]) * t0) * W, y0 + (j + t0) * sc,
 				c - (g[0] + (g[2] - g[0]) * t1) * W, y0 + (j + t1) * sc);
 			else if (j < b) stroke(cr, k + 1, c - g[0] * W, y0 + (j + g[1]) * sc, c - g[2] * W, y0 + (j + g[3]) * sc);
 		}
