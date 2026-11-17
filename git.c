@@ -267,7 +267,7 @@ int files(char **out, int op, Entry **e, int n)
 	if (op == 1 && base) a[3] = base, *p++ = "--";
 	for (; n--; e++) {
 		*p++ = (*e)->path;
-		if (op == 1 && (*e)->orig) *p++ = (*e)->orig;
+		if ((*e)->orig && (op == 1 || (op == 0 && (*e)->y == 'R'))) *p++ = (*e)->orig;
 	}
 	*p = 0;
 	r = git(out, 0, a);

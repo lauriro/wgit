@@ -302,6 +302,17 @@ check 'stage hunk next to an unmerged file' "$(printf -- '-2\n+two')" "$(changes
 "$T" unstage :0 "$(git diff --cached | nth 1)" || :
 check 'unstage hunk next to an unmerged file' '' "$(changes --cached -- a.txt)"
 
+# ---- Rename staging ----
+
+mkdir ../drivers && cd ../drivers && git init -q && git config user.name t && git config user.email t@t
+printf 'one\ntwo\nthree\n' > old.txt
+git add old.txt
+git commit -qm init
+mv old.txt new.txt
+git add -N new.txt
+"$T" add new.txt
+check 'stage whole work tree rename' 'R  new.txt < old.txt' "$("$T")"
+
 # ---- Stat ----
 
 mkdir ../stat && cd ../stat && git init -q && git config user.name t && git config user.email t@t
