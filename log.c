@@ -257,18 +257,19 @@ static void pick(GtkTreeSelection *s)
 	GtkTreeModel *m;
 	GtkTreeIter it;
 	const char *p;
-	char *o, *f[9];
+	char *o, *f[9], c[16];
 	int i;
 	if (!gtk_tree_selection_get_selected(s, &m, &it)) return;
+	snprintf(c, sizeof c, "-U%d", context);
 	gtk_tree_model_get(m, &it, 1, &i, -1);
 	if (i < 0) {
 		tagged = 0;
 		gtk_text_buffer_set_text(info, "", 0);
 		put(title, -1, "bold");
-		git(&o, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", "HEAD", 0});
+		git(&o, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", c, "HEAD", 0});
 		diff_files(dv, o);
 	} else if (!git(&o, 0, (char *[]){"git", "show", "--format=%H%x00%P%x00%an <%ae>%x00%ai%x00%G?%x00%GS%x00%B%x00%N%x00",
-		"--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", "--diff-merges=first-parent",
+		"--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", c, "--diff-merges=first-parent",
 		/* The edge of a shallow clone would show its whole tree as added: in Linux that is 1.7 GB */
 		row[i].edge ? "--no-patch" : "--patch", row[i].hash, 0})) {
 		cut(o, f, 9);
@@ -280,6 +281,26 @@ static void pick(GtkTreeSelection *s)
 			"git fetch --deepen=<commits> brings older history.\n" : f[8]);
 	}
 	free(o);
+}
+
+/* More or less context around the changes, as in the commit view: one setting for both */
+static void wider(GtkWidget *w, gpointer more)
+{
+	context = more ? 2 * context : MAX(1, context / 2);
+	pick(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
+}
+
+static void menu(GtkMenu *m, int hunk)
+{
+	static const char *name[] = {"Less context", "More context"};
+	GtkWidget *i;
+	gtk_menu_shell_prepend(GTK_MENU_SHELL(m), gtk_separator_menu_item_new());
+	for (int k = 0; k < 2; k++) {
+		gtk_menu_shell_prepend(GTK_MENU_SHELL(m), i = gtk_menu_item_new_with_label(name[k]));
+		gtk_widget_set_sensitive(i, k || context > 1);
+		g_signal_connect(i, "activate", G_CALLBACK(wider), GINT_TO_POINTER(k));
+	}
+	gtk_widget_show_all(GTK_WIDGET(m));
 }
 
 static void tag(char *name)
@@ -397,7 +418,7 @@ GtkWidget *log_view(GtkWidget **pane)
 	gtk_text_buffer_create_tag(info, "note", "paragraph-background", "rgba(128,128,128,0.2)", NULL);
 	pane[0] = split(GTK_ORIENTATION_HORIZONTAL);
 	pane[1] = split(GTK_ORIENTATION_VERTICAL);
-	gtk_paned_pack1(GTK_PANED(pane[1]), gtk_widget_get_parent(dv = diff_view(0, 0, 0)), TRUE, FALSE);
+	gtk_paned_pack1(GTK_PANED(pane[1]), gtk_widget_get_parent(dv = diff_view(0, menu, 0)), TRUE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[1]), v = scroll(v), FALSE, FALSE);
 	gtk_container_set_border_width(GTK_CONTAINER(v), 6);
 	gtk_widget_set_size_request(v, -1, 150);
