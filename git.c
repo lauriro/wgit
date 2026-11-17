@@ -78,6 +78,34 @@ int git(char **out, const char *in, char **argv)
 char *base;
 int context = 3;
 
+/* A message not yet committed, where git gui keeps one: a message begun in either goes on in the other */
+static FILE *drafts(const char *mode)
+{
+	char *p;
+	FILE *f = 0;
+	if (!git(&p, 0, (char *[]){"git", "rev-parse", "--git-path", "GITGUI_MSG", 0}) && strtok(p, "\n")) {
+		if (mode) f = fopen(p, mode);
+		else remove(p);
+	}
+	free(p);
+	return f;
+}
+
+char *draft(void)
+{
+	FILE *f = drafts("r");
+	char *s = f ? slurp(fileno(f)) : 0;
+	if (f) fclose(f);
+	return s;
+}
+
+/* An empty message keeps nothing: the file goes */
+void keep(const char *text)
+{
+	FILE *f = drafts(*text ? "w" : 0);
+	if (f) fputs(text, f), fclose(f);
+}
+
 char *parent(void)
 {
 	char *s;

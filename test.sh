@@ -354,6 +354,16 @@ check 'root of a whole clone is no edge' 0 "$("$T" log | grep -c '(edge)')"
 git clone -q --depth 1 "file://$PWD" ../shallow && cd ../shallow
 check 'edge of a shallow clone' 'two (edge)' "$("$T" log | cut -f3)"
 
+# ---- Message not yet committed ----
+
+mkdir ../draft && cd ../draft && git init -q && git config user.name t && git config user.email t@t
+"$T" keep "$(printf 'Begun\n\nnot done')"
+check 'keeps a message where git gui does' "$(printf 'Begun\n\nnot done')" "$(cat .git/GITGUI_MSG)"
+check 'reads it back' "$(printf 'Begun\n\nnot done')" "$("$T" draft)"
+"$T" keep ''
+check 'an empty message removes it' 'gone' "$([ -e .git/GITGUI_MSG ] && echo there || echo gone)"
+check 'nothing kept reads nothing' '' "$("$T" draft)"
+
 # ---- Stat ----
 
 mkdir ../stat && cd ../stat && git init -q && git config user.name t && git config user.email t@t

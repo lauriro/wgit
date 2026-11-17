@@ -14,6 +14,8 @@ extern int context, nent;
 
 int git(char **out, const char *in, char **argv);
 char *parent(void);
+char *draft(void);
+void keep(const char *text);
 char *repo(const char *path);
 void status(void);
 char *diff(Entry *e, int cached);

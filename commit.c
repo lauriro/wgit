@@ -392,7 +392,7 @@ static void submit(void)
 	char *s, *o;
 	int r, a = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(amend));
 	g_object_get(msg, "text", &s, NULL);
-	if (!(r = commit(&o, s, a))) gtk_text_buffer_set_text(msg, "", 0);
+	if (!(r = commit(&o, s, a))) gtk_text_buffer_set_text(msg, "", 0), keep("");
 	g_free(s);
 	/* The end of amend reloads the list itself */
 	if (r || !a) done(r, &o);
@@ -400,6 +400,17 @@ static void submit(void)
 		free(o);
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(amend), FALSE);
 	}
+}
+
+/* The message goes on at the next start, as in git gui; an amend's is the last commit's, not a new one */
+static gboolean closing(void)
+{
+	char *s;
+	if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(amend))) return FALSE;
+	g_object_get(msg, "text", &s, NULL);
+	keep(s);
+	g_free(s);
+	return FALSE;
 }
 
 static void last(GtkToggleButton *b)
@@ -431,6 +442,7 @@ GtkWidget *commit_view(GtkWidget **pane)
 	GCallback fn[] = {G_CALLBACK(submit), G_CALLBACK(reload)};
 	GtkWidget *l, *r, *b, *m, *c;
 	GtkTreeSelection *s;
+	char *o;
 	int k;
 	if (pane[0]) {
 		reload();
@@ -461,6 +473,7 @@ GtkWidget *commit_view(GtkWidget **pane)
 	gtk_box_pack_start(GTK_BOX(r), b = scroll(m = g_object_new(GTK_TYPE_TEXT_VIEW, "name", "plain", "monospace", TRUE, NULL)), TRUE, TRUE, 0);
 	gtk_widget_set_size_request(b, -1, 120);
 	msg = gtk_text_view_get_buffer(GTK_TEXT_VIEW(m));
+	if ((o = draft())) gtk_text_buffer_set_text(msg, o, -1), free(o);
 	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(b), amend = gtk_check_button_new_with_label("Amend"), FALSE, FALSE, 0);
 	for (k = 0; k < 2; k++) {
@@ -471,6 +484,7 @@ GtkWidget *commit_view(GtkWidget **pane)
 	gtk_paned_pack1(GTK_PANED(pane[0]), l, FALSE, FALSE);
 	gtk_paned_pack2(GTK_PANED(pane[0]), tabs(pane[1], diff_tools(dv)), TRUE, TRUE);
 	g_signal_connect(amend, "toggled", G_CALLBACK(last), 0);
+	g_signal_connect(win, "delete-event", G_CALLBACK(closing), 0);
 	g_signal_connect(win, "key-press-event", G_CALLBACK(key), 0);
 	if (!nent) status();
 	fill();

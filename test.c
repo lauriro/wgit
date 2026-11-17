@@ -28,6 +28,11 @@ int main(int argc, char **argv)
 		}
 		return 0;
 	}
+	if (argc == 2 && !strcmp(argv[1], "draft")) {
+		if ((o = draft())) fputs(o, stdout);
+		return 0;
+	}
+	if (argc == 3 && !strcmp(argv[1], "keep")) return keep(argv[2]), 0;
 	if (argc > 3 && !strcmp(argv[1], "stat")) {
 		char *s = stats(atoi(argv[2]), atol(argv[3]), argv[4]), *p;
 		for (p = s; *p; p++) putchar(*p == '\t' ? ' ' : *p);
