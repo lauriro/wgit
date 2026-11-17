@@ -252,7 +252,7 @@ static void all(GtkWidget *c, gpointer hide)
 
 GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 {
-	GtkWidget *v = g_object_new(GTK_TYPE_TEXT_VIEW, "editable", FALSE, "monospace", TRUE, "left-margin", MARGIN, "right-margin", MARGIN, "bottom-margin", MARGIN, NULL);
+	GtkWidget *v = g_object_new(GTK_TYPE_TEXT_VIEW, "editable", FALSE, "cursor-visible", FALSE, "monospace", TRUE, "left-margin", MARGIN, "right-margin", MARGIN, "bottom-margin", MARGIN, NULL);
 	GtkWidget *s = scroll(v);
 	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(v));
 	PangoLayout *l;
