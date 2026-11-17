@@ -96,23 +96,23 @@ void status(void)
 	static char *s, *d;
 	Entry *e = ent;
 	char *p, *q, *o;
-	int i, *n = &nent;
+	int i, n;
 	free(s);
 	free(d);
 	d = 0;
 	if (git(&s, 0, (char *[]){"git", "status", "--porcelain=v1", "-z", "-uall", 0})) *s = 0;
-	for (*n = 0, p = s; *p; (*n)++) {
-		e = realloc(e, (*n + 1) * sizeof *e);
-		e[*n] = (Entry){p + 3, 0, p[0], p[1]};
+	for (n = 0, p = s; *p; n++) {
+		e = realloc(e, (n + 1) * sizeof *e);
+		e[n] = (Entry){p + 3, 0, p[0], p[1]};
 		p += strlen(p) + 1;
-		if (*e[*n].path && (strchr("RC", e[*n].x) || strchr("RC", e[*n].y))) {
-			e[*n].orig = p;
+		if (*e[n].path && (strchr("RC", e[n].x) || strchr("RC", e[n].y))) {
+			e[n].orig = p;
 			p += strlen(p) + 1;
 		}
-		if (base && e[*n].x != '?') {
-			e[*n].x = ' ';
-			e[*n].orig = 0;
-			if (e[*n].y == ' ') (*n)--;
+		if (base && e[n].x != '?') {
+			e[n].x = ' ';
+			e[n].orig = 0;
+			if (e[n].y == ' ') n--;
 		}
 	}
 	if (base && !git(&d, 0, (char *[]){"git", "diff", "--cached", "--name-status", "-z", base, 0})) {
@@ -120,18 +120,19 @@ void status(void)
 			q = p + strlen(p) + 1;
 			o = strchr("RC", *p) ? q : 0;
 			if (o) q += strlen(q) + 1;
-			for (i = 0; i < *n && strcmp(e[i].path, q); i++);
-			if (i == *n) {
-				e = realloc(e, ++*n * sizeof *e);
+			for (i = 0; i < n && strcmp(e[i].path, q); i++);
+			if (i == n) {
+				e = realloc(e, ++n * sizeof *e);
 				e[i].y = ' ';
 				e[i].path = q;
 			}
 			e[i].x = *p;
 			e[i].orig = o;
 		}
-		qsort(e, *n, sizeof *e, by);
+		qsort(e, n, sizeof *e, by);
 	}
 	ent = e;
+	nent = n;
 }
 
 /* Each diff names its files as a/ and b/ and gives a submodule a plain diff, whatever the config of the user says. */
@@ -247,7 +248,7 @@ char *patch(const char *d, int from, int to, int rev)
 int apply(char **out, const char *d, int from, int to, int mode)
 {
 	char *p = patch(d, from, to, mode > 0);
-	int r = p ? git(out, p, (char *[]){"git", "apply", "--recount", mode > 1 ? "-R" : "--cached", mode ? "-R" : "--cached", "-", 0}) : (*out = 0, 0);
+	int r = p ? git(out, p, (char *[]){"git", "apply", "--recount", mode ? "-R" : "--cached", mode == 1 ? "--cached" : "--", "-", 0}) : (*out = 0, 0);
 	free(p);
 	return r;
 }
