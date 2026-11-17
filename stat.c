@@ -75,15 +75,14 @@ GtkWidget *stat_view(GtkWidget **pane)
 		 * the first row is the whole repo. A folder row counts the files below it */
 		st = gtk_tree_store_new(4, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT);
 		gtk_tree_store_append(st, par, 0);
-		if (git(&o, 0, (char *[]){"git", "ls-tree", "-r", "--name-only", "HEAD", 0})) *o = 0;
+		if (git(&o, 0, (char *[]){"git", "ls-tree", "-rz", "--name-only", "HEAD", 0})) *o = 0;
 		for (p = o; *p; prev = p, p = e, n++) {
-			e = p + strcspn(p, "\n");
-			if (*e) *e++ = 0;
+			e = p + strlen(p) + 1;
 			while (d && strncmp(p, prev, len[d])) d--;
 			for (; d < 63 && (q = strchr(p + len[d], '/')); *q = c) {
 				c = *++q;
 				m = q - p;
-				for (k = 1, s = e; *s && !strncmp(s, p, m); s += strcspn(s, "\n"), s += !!*s) k++;
+				for (k = 1, s = e; *s && !strncmp(s, p, m); s += strlen(s) + 1) k++;
 				*q = 0;
 				gtk_tree_store_append(st, par + d + 1, par + d);
 				set(st, par + d + 1, g_markup_printf_escaped(count, p + len[d], k), p, "pan-end-symbolic");
