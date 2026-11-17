@@ -369,9 +369,11 @@ by Ann 2026-01-30T15:00:00
 check 'stat last month' 'Commits: 3 +7-1' "$(stat 30 | head -1)"
 check 'stat last year' 'Commits: 4 +8-1' "$(stat 365 | head -1)"
 check 'stat all' 'Commits: 4 +8-1' "$(stat 0 | head -1)"
-check 'stat empty' 'Commits: 0' "$("$T" stat 1 $((NOW + 864000)))"
+check 'stat empty' 'Commits: 0' "$("$T" stat 1 $((NOW + 864000)) | head -1)"
 check 'stat path' 'Commits: 2 +4-1' "$(TZ=UTC "$T" stat 30 "$NOW" src/ | head -1)"
 check 'stat authors' "$(printf '     2  66.7%%  Ann <Ann@t> +6-1\n     1  33.3%%  Bob <Bob@t> +1')" "$(stat 30 | sed -n '3,4p')"
+check 'stat extension' '     5  62.5%  c +4-1' "$(stat 30 | sed -n '/Lines changed/{n;n;p;}')"
+check 'stat extensionless file' '     1  12.5%  (no extension) +1' "$(stat 30 | grep '(no extension)')"
 # An author is a name and an email: one name with two emails is two authors
 git commit -q --allow-empty --author='Ann <another@t>' -m names
 check 'stat author email identity' 2 "$(stat 0 | grep -c 'Ann <')"

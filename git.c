@@ -420,10 +420,19 @@ static void name(FILE *f, const char *p)
 	}
 }
 
+/* The extension of a file's name, not of its folder's; a name with none, as Makefile or .gitignore, is one group */
+static char *extension(char *path)
+{
+	char *p = strrchr(path, '/'), *q;
+	p = p ? p + 1 : path;
+	q = strrchr(p, '.');
+	return q && q != p && q[1] ? q + 1 : "(no extension)";
+}
+
 /* Sections from one log: a heading with its total and lines, then its rows ranked by count, each with its share */
 char *stats(int days, long now, const char *path)
 {
-	static const char *const head[] = { "Commits: %ld" };
+	static const char *const head[] = { "Commits: %ld", "Lines changed by file type: %ld" };
 	enum { N = sizeof head / sizeof *head };
 	Tab t[N] = {{0}};
 	Stat *author = 0, *v;
@@ -443,9 +452,13 @@ char *stats(int days, long now, const char *path)
 		else if (author && (q = strchr(p, '\t'))) {
 			a = strtol(p, 0, 10), d = strtol(q + 1, 0, 10);
 			add += a, del += d, author->add += a, author->del += d;
+			if (a || d) {
+				v = get(t + 1, extension(strchr(q + 1, '\t') + 1));
+				v->n += a + d, v->add += a, v->del += d;
+			}
 		}
 	}
-	long total[N] = { nc }, plus[N] = { add }, minus[N] = { del };
+	long total[N] = { nc, add + del }, plus[N] = { add, add }, minus[N] = { del, del };
 	for (k = 0; k < N; k++) {
 		if (k) fputc('\n', f);
 		fprintf(f, head[k], total[k]);

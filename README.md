@@ -106,6 +106,8 @@ the graph of all branches at the left, the diff of the selected commit at the ri
   each a name with an email, with their commits, their share of them and their lines.
 - Each section comes from the same git log, for the path and the period.
   A merge counts as a commit but adds no lines, as git log shows it.
+- Lines changed by file type adds the added and removed lines of each extension; a name with none, as `Makefile`,
+  is `(no extension)`.
 - `All` reads the whole history in one git run, so a large repo takes some time.
 
 ## Contributing
