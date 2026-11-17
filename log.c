@@ -7,7 +7,7 @@
 #include "git.h"
 #include "ui.h"
 
-enum { W = 7, PAD = 4, PAGE = 10000 };
+enum { W = 7, PAD = 4, GAP = 3, PAGE = 10000 };
 
 static GtkWidget *list, *dv;
 static GtkTreeViewColumn *graph;
@@ -156,17 +156,20 @@ static void span(cairo_t *cr, int a, int b, double ya, double h)
 {
 	const char *p, *s;
 	const double *g;
-	double t0, t1, c, sc = h / (b - a), y0 = ya - (a + .5) * sc;
-	int j, k;
+	double t0, t1, c, d, sc = h / (b - a), y0 = ya - (a + .5) * sc;
+	int j, k, m;
 	for (j = a; j <= b; j++) for (p = row[j].graph, t0 = j == a ? .5 : 0, t1 = j == b ? .5 : 1, k = 0; p[k]; k++) {
 		c = col(k);
 		if (p[k] == '*') {
 			if (j == a ? joins(row[a + 1].graph, k, 1) : joins(row[b - 1].graph, k, 0)) stroke(cr, k, c, y0 + (j + t0) * sc, c, y0 + (j + t1) * sc);
+			if (j > a && (m = rider(row, j, k)) >= 0) stroke(cr, m, c - GAP, y0 + j * sc, c, y0 + (j + .5) * sc);
 		} else if ((s = strchr(shape, p[k]))) {
 			g = geom[s - shape];
-			if (g[1] != g[3]) stroke(cr, lane(row, j, k), c - (g[0] + (g[2] - g[0]) * t0) * W, y0 + (j + t0) * sc,
-				c - (g[0] + (g[2] - g[0]) * t1) * W, y0 + (j + t1) * sc);
+			d = j < b && k && p[k] == '/' && joined(row, j, k - 1) ? GAP : 0;
+			if (g[1] != g[3]) stroke(cr, lane(row, j, k), c - (g[0] + (g[2] - g[0]) * t0) * W - d * t0, y0 + (j + t0) * sc,
+				c - (g[0] + (g[2] - g[0]) * t1) * W - d * t1, y0 + (j + t1) * sc);
 			else if (j < b) stroke(cr, k + 1, c - g[0] * W, y0 + (j + g[1]) * sc, c - g[2] * W, y0 + (j + g[3]) * sc);
+			if (p[k] == '|' && (m = rider(row, j, k)) >= 0) stroke(cr, m, c - GAP, y0 + (j + t0) * sc, c - GAP, y0 + (j + t1) * sc);
 		}
 	}
 }

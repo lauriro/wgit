@@ -177,6 +177,13 @@ git checkout -q main && ci two 2
 git checkout -q -b a && ci a1 3
 git checkout -q main && ci three 5
 check 'log lane of a line across lanes' "$(printf '%s\n' '* ' '0 * ' '0 2 * ' '0 24  ' '042   ' '* 2 ' '02  ' '* ')" "$("$T" lanes)"
+check 'log line that passes a lane' "$(printf '%s\n' '* ' '| * ' '| | * ' '| |/  ' '|/|   ' '4 | ' '|/  ' '2 ')" "$("$T" riders)"
+mkdir ../riders && cd ../riders && git init -q -b main && git config user.name t && git config user.email t@t
+ci one 1
+git checkout -q -b d && ci d1 2
+git checkout -q -b a main && ci a1 3 && ci a2 4
+git checkout -q main && ci two 5
+check 'log lines beside a lane to its dot' "$(printf '%s\n' '* ' '| * ' '| * ' '|/  ' '2 * ' '2/  ' '2 ')" "$("$T" riders)"
 cd ../log
 
 # ---- Section diffs ----

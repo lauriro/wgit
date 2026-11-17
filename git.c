@@ -499,6 +499,20 @@ int lane(const Row *r, int j, int k)
 	return k + (c != '|');
 }
 
+/* A '/' that lands on a '|' joins that lane, unless the row below takes the line on to the next lane */
+int joined(const Row *r, int j, int k)
+{
+	const char *g = r[j].graph, *b = r[j + 1].graph;
+	return g[k] == '|' && g[k + 1] == '/' && (k < 1 || strnlen(b, k) < k || b[k - 1] != '/');
+}
+
+/* The line that joined lane k above row j runs down beside the lane to the next dot */
+int rider(const Row *r, int j, int k)
+{
+	while (j-- > 0 && strnlen(r[j].graph, k + 1) > k && r[j].graph[k] == '|') if (joined(r, j, k)) return lane(r, j, k + 1);
+	return -1;
+}
+
 char *repo(const char *path)
 {
 	char *top;

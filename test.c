@@ -33,6 +33,11 @@ int main(int argc, char **argv)
 		for (i = 0; i < n; i++, puts("")) for (k = 0; w[i].graph[k]; k++) putchar(strchr("* ", w[i].graph[k]) ? w[i].graph[k] : '0' + lane(w, i, k));
 		return 0;
 	}
+	if (argc == 2 && !strcmp(argv[1], "riders")) {
+		Row *w = history(&n, 1 << 30);
+		for (i = 0; i < n; i++, puts("")) for (k = 0; (j = w[i].graph[k]); k++) putchar(strchr("*|", j) && (r = rider(w, i, k)) >= 0 ? '0' + r : j);
+		return 0;
+	}
 	if (argc == 2 && !strcmp(argv[1], "draft")) {
 		if ((o = draft())) fputs(o, stdout);
 		return 0;
