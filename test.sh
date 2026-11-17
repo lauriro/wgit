@@ -366,11 +366,15 @@ mkdir src && seq 3 > src/a.c && seq 2 > b.txt
 by Ann 2026-01-30T09:00:00
 sed -i 's/^2$/two/' src/a.c
 by Ann 2026-01-30T15:00:00
-check 'stat last month' "$(printf '%s\n\n     2\tAnn\n     1\tBob' 'Commits 3, authors 2, active days 2, lines +7 -1')" "$(stat 30)"
-check 'stat last year' "$(printf '%s\n\n     3\tAnn\n     1\tBob' 'Commits 4, authors 2, active days 3, lines +8 -1')" "$(stat 365)"
-check 'stat all' 'Commits 4, authors 2, active days 3, lines +8 -1' "$(stat 0 | head -1)"
-check 'stat empty' 'Commits 0, authors 0, active days 0, lines +0 -0' "$("$T" stat 1 $((NOW + 864000)))"
-check 'stat path' 'Commits 2, authors 1, active days 1, lines +4 -1' "$(TZ=UTC "$T" stat 30 "$NOW" src/ | head -1)"
+check 'stat last month' 'Commits: 3 +7-1' "$(stat 30 | head -1)"
+check 'stat last year' 'Commits: 4 +8-1' "$(stat 365 | head -1)"
+check 'stat all' 'Commits: 4 +8-1' "$(stat 0 | head -1)"
+check 'stat empty' 'Commits: 0' "$("$T" stat 1 $((NOW + 864000)))"
+check 'stat path' 'Commits: 2 +4-1' "$(TZ=UTC "$T" stat 30 "$NOW" src/ | head -1)"
+check 'stat authors' "$(printf '     2  66.7%%  Ann <Ann@t> +6-1\n     1  33.3%%  Bob <Bob@t> +1')" "$(stat 30 | sed -n '3,4p')"
+# An author is a name and an email: one name with two emails is two authors
+git commit -q --allow-empty --author='Ann <another@t>' -m names
+check 'stat author email identity' 2 "$(stat 0 | grep -c 'Ann <')"
 
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

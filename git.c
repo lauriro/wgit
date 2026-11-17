@@ -373,7 +373,7 @@ char *repo(const char *path)
 
 typedef struct {
 	char *key;
-	long n;
+	long n, add, del;
 } Stat;
 
 typedef struct {
@@ -402,38 +402,65 @@ static int rank(const void *a, const void *b)
 	return s->n < t->n ? 1 : s->n > t->n ? -1 : strcmp(s->key, t->key);
 }
 
-/* The totals, then the authors as `git shortlog -ns` shows them. t has the authors and the days with a commit */
+/* A count field after a tab: names escape their tabs, so the view finds it as it is */
+static void counts(FILE *f, long add, long del)
+{
+	if (add || del) fputc('\t', f);
+	if (add) fprintf(f, "+%ld", add);
+	if (del) fprintf(f, "-%ld", del);
+}
+
+/* A name with its control characters escaped, so that it cannot split its row */
+static void name(FILE *f, const char *p)
+{
+	static const char esc[] = "\n\r\t\\";
+	for (const char *x; *p; p++) {
+		if ((x = strchr(esc, *p))) fprintf(f, "\\%c", "nrt\\"[x - esc]);
+		else fputc(*p, f);
+	}
+}
+
+/* Sections from one log: a heading with its total and lines, then its rows ranked by count, each with its share */
 char *stats(int days, long now, const char *path)
 {
-	Tab t[2] = {{0}}, *u;
+	static const char *const head[] = { "Commits: %ld" };
+	enum { N = sizeof head / sizeof *head };
+	Tab t[N] = {{0}};
+	Stat *author = 0, *v;
 	char *s, *o, *p, *q, *e, since[32];
 	time_t n = now;
-	long add = 0, del = 0, off = localtime(&n)->tm_gmtoff;
-	int i, nc = 0;
+	long add = 0, del = 0, a, d, nc = 0, off = localtime(&n)->tm_gmtoff;
+	int i, k;
 	size_t len;
 	FILE *f = open_memstream(&o, &len);
 	snprintf(since, sizeof since, "--since=%ld", ((now + off) / 86400 - days + 1) * 86400 - off);
-	if (git(&s, 0, (char *[]){"git", "log", "--numstat", "--no-renames", "--format=%x01%ad%x1f%aN",
-		"--date=format:%Y-%m-%d", days ? since : "--no-renames", "--", (char *)path, 0})) *s = 0;
+	if (git(&s, 0, (char *[]){"git", "log", "--numstat", "-z", "--no-renames", "--no-ext-diff", "--no-textconv",
+		"--format=%x01%aN <%aE>", days ? since : "--no-renames", "--", (char *)path, 0})) *s = 0;
 	for (p = s; *p; p = e) {
-		e = p + strcspn(p, "\n");
-		if (*e) *e++ = 0;
-		if (*p == 1) {
-			nc++;
-			p[11] = 0;
-			get(t + 1, p + 1);
-			get(t, p + 12)->n++;
-		} else if ((q = strchr(p, '\t'))) {
-			add += strtol(p, 0, 10);
-			del += strtol(q + 1, 0, 10);
+		e = p + strlen(p) + 1;
+		while (*p == '\n') p++;
+		if (*p == 1) nc++, (author = get(t, p + 1))->n++;
+		else if (author && (q = strchr(p, '\t'))) {
+			a = strtol(p, 0, 10), d = strtol(q + 1, 0, 10);
+			add += a, del += d, author->add += a, author->del += d;
 		}
 	}
-	fprintf(f, "Commits %d, authors %d, active days %d, lines +%ld -%ld\n", nc, t->n, t[1].n, add, del);
-	qsort(t->v, t->n, sizeof *t->v, rank);
-	for (i = 0; i < t->n; i++) fprintf(f, "%s%6ld\t%s\n", &"\n"[!!i], t->v[i]->n, t->v[i]->key);
-	for (u = t; u < t + 2; u++) {
-		tdestroy(u->root, free);
-		free(u->v);
+	long total[N] = { nc }, plus[N] = { add }, minus[N] = { del };
+	for (k = 0; k < N; k++) {
+		if (k) fputc('\n', f);
+		fprintf(f, head[k], total[k]);
+		counts(f, plus[k], minus[k]);
+		fputs(t[k].n ? "\n\n" : "\n", f);
+		qsort(t[k].v, t[k].n, sizeof *t[k].v, rank);
+		for (i = 0; i < t[k].n; i++) {
+			v = t[k].v[i];
+			fprintf(f, "%6ld %5.1f%%  ", v->n, 100.0 * v->n / total[k]);
+			name(f, v->key);
+			counts(f, v->add, v->del);
+			fputc('\n', f);
+		}
+		tdestroy(t[k].root, free);
+		free(t[k].v);
 	}
 	free(s);
 	fclose(f);

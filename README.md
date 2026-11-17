@@ -102,8 +102,10 @@ the graph of all branches at the left, the diff of the selected commit at the ri
 - The file tree at the left shows the files of HEAD. Select a folder or a file to see the stats of that path only;
   `All files` shows the whole repo. The tree is read once, when the view opens.
 - The `[ Last month | Last year | All ]` switcher sets the period: the last 30 days, the last 365 days, or the whole history of HEAD.
-- The first line counts the commits, the authors, the days with a commit and the added and removed lines.
-- Then come the authors and their commit counts, as `git shortlog -ns` shows them, for the period and the path.
+- The first section counts the commits and the added and removed lines, then lists the authors,
+  each a name with an email, with their commits, their share of them and their lines.
+- Each section comes from the same git log, for the path and the period.
+  A merge counts as a commit but adds no lines, as git log shows it.
 - `All` reads the whole history in one git run, so a large repo takes some time.
 
 ## Contributing

@@ -28,7 +28,12 @@ int main(int argc, char **argv)
 		}
 		return 0;
 	}
-	if (argc > 3 && !strcmp(argv[1], "stat")) return fputs(stats(atoi(argv[2]), atol(argv[3]), argv[4]), stdout), 0;
+	if (argc > 3 && !strcmp(argv[1], "stat")) {
+		char *s = stats(atoi(argv[2]), atol(argv[3]), argv[4]), *p;
+		for (p = s; *p; p++) putchar(*p == '\t' ? ' ' : *p);
+		free(s);
+		return 0;
+	}
 	if (argc > 1 && !strcmp(argv[1], "amend")) base = parent(), argv++, argc--;
 	if (argc > 1 && !strncmp(argv[1], "-U", 2)) context = atoi(argv[1] + 2), argv++, argc--;
 	status();
