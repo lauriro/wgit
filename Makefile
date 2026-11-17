@@ -12,6 +12,10 @@ wgit-test: test.c git.c git.h
 test: wgit-test
 	sh test.sh
 
+test-gtk:
+	$(CC) $(CFLAGS) -o /tmp/wgit-test-gtk test-gtk.c commit.c log.c diff-view.c git.c ui.c $(GTK)
+	G_DEBUG=fatal-warnings xvfb-run -a /tmp/wgit-test-gtk
+
 clean:
 	rm -f wgit wgit-test
 

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "diff-view.h"
 #include "git.h"
 #include "ui.h"
 
@@ -16,8 +17,10 @@ static void load(void)
 	GtkTreeModel *m;
 	GtkTreeIter row;
 	GtkWidget *c = gtk_stack_get_visible_child(GTK_STACK(stack));
-	char *o, *s, *path = 0;
+	char *o, *s, *p, *q, *e, *path = 0;
+	GtkTextIter a;
 	int k = 0;
+	long add, del;
 	/* The stack has no visible page until it is shown; it loads then. */
 	if (!c) return;
 	while (page[k] != c) k++;
@@ -25,7 +28,21 @@ static void load(void)
 	s = g_utf8_make_valid(o = stats(days[k], time(0), path && *path ? path : 0), -1);
 	g_object_set(where, "label", path && *path ? path : "All files", NULL);
 	g_free(path);
-	gtk_text_buffer_set_text(buf, s, -1);
+	gtk_text_buffer_set_text(buf, "", 0);
+	gtk_text_buffer_get_end_iter(buf, &a);
+	/* A line's counts follow its tab, drawn as the diff titles draw theirs */
+	for (p = s; *p; p = e + !!*e) {
+		e = p + strcspn(p, "\n");
+		q = memchr(p, '\t', e - p);
+		gtk_text_buffer_insert(buf, &a, p, (q ? q : e) - p);
+		if (q) {
+			add = *++q == '+' ? strtol(q, &q, 10) : 0;
+			del = *q == '-' ? -strtol(q, 0, 10) : 0;
+			gtk_text_buffer_insert(buf, &a, " ", 1);
+			diff_counts(buf, &a, add, del);
+		}
+		gtk_text_buffer_insert(buf, &a, "\n", !!*e);
+	}
 	free(o);
 	g_free(s);
 }

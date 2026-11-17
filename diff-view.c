@@ -16,8 +16,8 @@ typedef void Top(const char *path);
 #define MARGIN 6
 
 /* A sixth of an em after the added count keeps it apart from the removed count. */
-#define ADD "+%d\u2006"
-#define DEL "-%d"
+#define ADD "+%ld\u2006"
+#define DEL "-%ld"
 
 /* GTK scrolls to a file in steps. From diff_goto() until the pointer is used on the diff, a scroll is not the user's,
  * so it must not move the selection in the file list. */
@@ -299,25 +299,45 @@ GtkWidget *diff_tools(GtkWidget *view)
 	return b;
 }
 
-static const char *num(char *s, const char *fmt, int n)
+static const char *num(char *s, const char *fmt, long n)
 {
 	*s = 0;
 	if (n) snprintf(s, 16, fmt, n);
 	return s;
 }
 
+void diff_counts(GtkTextBuffer *b, GtkTextIter *it, long a, long d)
+{
+	char s[32], *face;
+	int i;
+	GtkTextTagTable *table = gtk_text_buffer_get_tag_table(b);
+	if (!gtk_text_tag_table_lookup(table, "counts")) {
+		g_object_get(gtk_settings_get_default(), "gtk-font-name", &face, NULL);
+		gtk_text_buffer_create_tag(b, "counts", "font", face, NULL);
+		g_free(face);
+		for (i = 2; i < 4; i++) if (!gtk_text_tag_table_lookup(table, tags[i][0]))
+			gtk_text_buffer_create_tag(b, tags[i][0], "foreground", tags[i][1], NULL);
+	}
+	if (a) {
+		snprintf(s, sizeof s, ADD, a);
+		gtk_text_buffer_insert_with_tags_by_name(b, it, s, -1, "+", "counts", NULL);
+	}
+	if (d) {
+		snprintf(s, sizeof s, DEL, d);
+		gtk_text_buffer_insert_with_tags_by_name(b, it, s, -1, "-", "counts", NULL);
+	}
+}
+
 static void title(GtkTextView *v, GtkTextMark *m, const char *name, int len, int a, int d)
 {
 	GtkTextBuffer *b = gtk_text_view_get_buffer(v);
 	GtkTextIter it, st;
-	char s[16];
 	gtk_text_buffer_get_iter_at_mark(b, &it, m);
 	arrow(v, &it, 0);
 	gtk_text_buffer_insert(b, &it, " ", -1);
 	gtk_text_buffer_insert_with_tags_by_name(b, &it, name, len, "bold", NULL);
 	gtk_text_buffer_insert(b, &it, "  ", -1);
-	gtk_text_buffer_insert_with_tags_by_name(b, &it, num(s, ADD, a), -1, "+", NULL);
-	gtk_text_buffer_insert_with_tags_by_name(b, &it, num(s, DEL, d), -1, "-", NULL);
+	diff_counts(b, &it, a, d);
 	gtk_text_buffer_insert(b, &it, "\n", -1);
 	gtk_text_buffer_get_iter_at_mark(b, &st, m);
 	gtk_text_buffer_apply_tag(b, tag(b, "title"), &st, &it);
