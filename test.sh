@@ -313,6 +313,22 @@ git add -N new.txt
 "$T" add new.txt
 check 'stage whole work tree rename' 'R  new.txt < old.txt' "$("$T")"
 
+# ---- Text conversion ----
+
+git add -A
+git commit -qm rename
+printf '*.txt diff=upper\n' > .gitattributes
+git config diff.upper.textconv 'tr a-z A-Z <'
+printf 'four\n' >> new.txt
+"$T" stage new.txt 4 || :
+check 'stage hunk with textconv' "$(printf 'one\ntwo\nthree\nfour')" "$(git show :new.txt)"
+git add new.txt
+"$T" unstage new.txt 4 || :
+check 'unstage hunk with textconv' "$(printf 'one\ntwo\nthree')" "$(git show :new.txt)"
+git reset -q HEAD -- new.txt
+"$T" discard new.txt 4 || :
+check 'revert hunk with textconv' "$(printf 'one\ntwo\nthree')" "$(cat new.txt)"
+
 # ---- Stat ----
 
 mkdir ../stat && cd ../stat && git init -q && git config user.name t && git config user.email t@t

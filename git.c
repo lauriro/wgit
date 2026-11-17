@@ -140,7 +140,7 @@ char *diff(Entry *e, int cached)
 	char *s, c[16];
 	if (e && !cached && e->y == '?') return diffs(2, e, 1);
 	snprintf(c, sizeof c, "-U%d", context);
-	git(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", c,
+	git(&s, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--default-prefix", "--submodule=short", c,
 		cached ? "--cached" : "-p", cached && base ? base : "-p", "--", e ? e->path : 0, 0});
 	return s;
 }
