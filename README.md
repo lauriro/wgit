@@ -77,6 +77,9 @@ the graph of all branches at the left, the diff of the selected commit at the ri
 |--------------|-----------------------------------------------------------|
 | `Ctrl+Enter` | Commit                                                    |
 | `F5`         | Reload the file lists, as Rescan does                     |
+| `Ctrl+T`     | Stage the selected files, as in git citool                |
+| `Ctrl+U`     | Unstage the selected files                                |
+| `Ctrl+I`     | Stage all changed files, not the untracked ones           |
 | `Delete`     | Revert the selected files, in the file list, asks first   |
 
 

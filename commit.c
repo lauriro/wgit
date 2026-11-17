@@ -489,12 +489,25 @@ static void last(GtkToggleButton *b)
 	reload();
 }
 
+/* All changed files of the work tree, not the untracked ones, staged: git citool's Ctrl+I */
+static void changed(void)
+{
+	Entry **e = malloc(nent * sizeof *e + 1);
+	int i, n = 0;
+	for (i = 0; i < nent; i++) if (has(1, i)) e[n++] = ent + i;
+	go(e, n, 0, 1);
+}
+
 static gboolean key(GtkWidget *w, GdkEventKey *ev)
 {
 	if (!gtk_widget_get_mapped(list)) return FALSE;
 	if (editing() && ev->keyval == GDK_KEY_Escape) cancel();
 	else if (editing() && ev->keyval == GDK_KEY_s && ev->state & GDK_CONTROL_MASK) save();
 	else if (ev->keyval == GDK_KEY_F5) reload();
+	/* As git citool: Ctrl+T stages, Ctrl+U unstages the selected files, where the buttons can */
+	else if ((ev->keyval == GDK_KEY_t || ev->keyval == GDK_KEY_u) && ev->state & GDK_CONTROL_MASK) {
+		if (gtk_widget_get_sensitive(bar[ev->keyval == GDK_KEY_u])) run(0, GINT_TO_POINTER(ev->keyval == GDK_KEY_u));
+	} else if (ev->keyval == GDK_KEY_i && ev->state & GDK_CONTROL_MASK) changed();
 	else if (ev->keyval == GDK_KEY_Delete && gtk_widget_has_focus(list) && gtk_widget_get_sensitive(bar[2])) run(0, GINT_TO_POINTER(2));
 	else if ((ev->keyval == GDK_KEY_Return || ev->keyval == GDK_KEY_KP_Enter) && ev->state & GDK_CONTROL_MASK) submit();
 	else return FALSE;
