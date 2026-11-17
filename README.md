@@ -108,6 +108,8 @@ the graph of all branches at the left, the diff of the selected commit at the ri
   A merge counts as a commit but adds no lines, as git log shows it.
 - Lines changed by file type adds the added and removed lines of each extension; a name with none, as `Makefile`,
   is `(no extension)`.
+- The 20 files changed most often, each with the share of the commits that changed it and its lines:
+  a commit changes many files, so the shares add up to more than 100%.
 - `All` reads the whole history in one git run, so a large repo takes some time.
 
 ## Contributing

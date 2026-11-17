@@ -432,7 +432,9 @@ static char *extension(char *path)
 /* Sections from one log: a heading with its total and lines, then its rows ranked by count, each with its share */
 char *stats(int days, long now, const char *path)
 {
-	static const char *const head[] = { "Commits: %ld", "Lines changed by file type: %ld" };
+	static const char *const head[] = { "Commits: %ld", "Lines changed by file type: %ld", "Most frequently changed files (top 20)" };
+	/* How many rows a section shows, 0 for all */
+	static const int most[] = { 0, 0, 20 };
 	enum { N = sizeof head / sizeof *head };
 	Tab t[N] = {{0}};
 	Stat *author = 0, *v;
@@ -450,22 +452,21 @@ char *stats(int days, long now, const char *path)
 		while (*p == '\n') p++;
 		if (*p == 1) nc++, (author = get(t, p + 1))->n++;
 		else if (author && (q = strchr(p, '\t'))) {
-			a = strtol(p, 0, 10), d = strtol(q + 1, 0, 10);
+			/* added, removed and the path; a binary file's counts are - */
+			a = strtol(p, 0, 10), d = strtol(q + 1, 0, 10), q = strchr(q + 1, '\t') + 1;
 			add += a, del += d, author->add += a, author->del += d;
-			if (a || d) {
-				v = get(t + 1, extension(strchr(q + 1, '\t') + 1));
-				v->n += a + d, v->add += a, v->del += d;
-			}
+			v = get(t + 2, q), v->n++, v->add += a, v->del += d;
+			if (a || d) v = get(t + 1, extension(q)), v->n += a + d, v->add += a, v->del += d;
 		}
 	}
-	long total[N] = { nc, add + del }, plus[N] = { add, add }, minus[N] = { del, del };
+	long total[N] = { nc, add + del, nc }, plus[N] = { add, add }, minus[N] = { del, del };
 	for (k = 0; k < N; k++) {
 		if (k) fputc('\n', f);
 		fprintf(f, head[k], total[k]);
 		counts(f, plus[k], minus[k]);
 		fputs(t[k].n ? "\n\n" : "\n", f);
 		qsort(t[k].v, t[k].n, sizeof *t[k].v, rank);
-		for (i = 0; i < t[k].n; i++) {
+		for (i = 0; i < t[k].n && (!most[k] || i < most[k]); i++) {
 			v = t[k].v[i];
 			fprintf(f, "%6ld %5.1f%%  ", v->n, 100.0 * v->n / total[k]);
 			name(f, v->key);

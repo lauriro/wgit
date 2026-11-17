@@ -374,6 +374,12 @@ check 'stat path' 'Commits: 2 +4-1' "$(TZ=UTC "$T" stat 30 "$NOW" src/ | head -1
 check 'stat authors' "$(printf '     2  66.7%%  Ann <Ann@t> +6-1\n     1  33.3%%  Bob <Bob@t> +1')" "$(stat 30 | sed -n '3,4p')"
 check 'stat extension' '     5  62.5%  c +4-1' "$(stat 30 | sed -n '/Lines changed/{n;n;p;}')"
 check 'stat extensionless file' '     1  12.5%  (no extension) +1' "$(stat 30 | grep '(no extension)')"
+check 'stat frequent file' '     2  66.7%  src/a.c +4-1' "$(stat 30 | sed -n '/Most frequently/{n;n;p;}')"
+ODD=$(printf 'src/new\nname\t.js')
+echo odd > "$ODD"
+by Ann 2026-01-31T10:30:00
+check 'stat unusual filename' '     1  25.0%  src/new\nname\t.js +1' "$(stat 30 | grep 'src/new')"
+check 'stat unusual path filter' 'Commits: 1 +1' "$(TZ=UTC "$T" stat 30 "$NOW" "$ODD" | head -1)"
 # An author is a name and an email: one name with two emails is two authors
 git commit -q --allow-empty --author='Ann <another@t>' -m names
 check 'stat author email identity' 2 "$(stat 0 | grep -c 'Ann <')"
