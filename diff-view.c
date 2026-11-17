@@ -21,7 +21,7 @@ typedef void Top(const char *path);
 
 /* GTK scrolls to a file in steps. From diff_goto() until the pointer is used on the diff, a scroll is not the user's,
  * so it must not move the selection in the file list. */
-static int at = -1, one = -1, jump, asc;
+static int at = -1, one = -1, jump, hold, asc;
 static char *font;
 static const char *tags[][2] = {
 	{"head", "#57c"},
@@ -117,7 +117,7 @@ static void moved(GtkAdjustment *a, GtkTextView *v)
 	GdkRectangle r;
 	char *s, *p;
 	int y, end, h;
-	if (!g || jump) return;
+	if (!g || jump || hold) return;
 	gtk_text_view_get_visible_rect(v, &r);
 	gtk_text_buffer_get_iter_at_mark(b, &it, g);
 	gtk_text_view_get_line_yrange(v, &it, &y, &h);
@@ -197,6 +197,8 @@ static gboolean click(GtkTextView *w, GdkEventButton *ev, Hunk *hunk)
 	GtkTextBuffer *b = gtk_text_view_get_buffer(w);
 	GtkTextIter a, c;
 	int l;
+	/* While lines are edited, a click only moves the cursor */
+	if (gtk_text_view_get_editable(w)) return FALSE;
 	if (ev->button == 1 && hit(w, ev, &a)) {
 		fold(w, gtk_text_iter_get_line(&a), -1);
 		return TRUE;
@@ -232,12 +234,24 @@ static void popup(GtkTextView *w, GtkWidget *m, Menu *menu)
 	at = one = -1;
 }
 
+/* A place kept over a reload, as a scroll value: set at once, never scrolled to, which GTK animates. GTK measures a
+ * new text bit by bit and holds the value within what it has measured, so it is set again as the text grows, and last
+ * in an idle below GTK's own measuring, when the whole text is measured. The text above an edit is as it was */
+static double kept;
+
+static gboolean settle(GtkTextView *v)
+{
+	if (hold) gtk_adjustment_set_value(gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(v)), kept), hold = 0;
+	return G_SOURCE_REMOVE;
+}
+
 /* GTK measures a new text bit by bit, and a scroll cannot pass the height measured so far,
  * so the scroll to a file is done again each time the height changes. */
 static void grown(GtkAdjustment *a, GtkTextView *v)
 {
 	GtkTextMark *g = gtk_text_buffer_get_mark(gtk_text_view_get_buffer(v), "goto");
-	if (g && jump) gtk_text_view_scroll_to_mark(v, g, 0, TRUE, 0, 0);
+	if (hold) gtk_adjustment_set_value(a, kept);
+	else if (g && jump) gtk_text_view_scroll_to_mark(v, g, 0, TRUE, 0, 0);
 }
 
 static gboolean used(void)
@@ -245,10 +259,19 @@ static gboolean used(void)
 	return jump = 0;
 }
 
+/* A place kept over a reload holds until the user scrolls or clicks: a pointer only passing does not end it */
+static gboolean let(void)
+{
+	hold = 0;
+	return FALSE;
+}
+
 static void all(GtkWidget *c, gpointer hide)
 {
 	diff_fold(g_object_get_data(G_OBJECT(c), "view"), "", 0, GPOINTER_TO_INT(hide));
 }
+
+static void recolor(GtkTextBuffer *b);
 
 GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 {
@@ -269,6 +292,13 @@ GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 	}
 	g_object_set_data(G_OBJECT(b), "title", gtk_text_buffer_create_tag(b, "title", "font", font, "pixels-below-lines", PAD, "left-margin", 0, "right-margin", 0, "paragraph-background", "rgba(128,128,128,0.2)", NULL));
 	gtk_text_buffer_create_tag(b, "bold", "weight", PANGO_WEIGHT_BOLD, NULL);
+	/* An edit: the yellow block of lines that alone takes typing */
+	gtk_text_buffer_create_tag(b, "lock", "editable", FALSE, NULL);
+	/* The block keeps its text where it was: a margin of one character where the + or space was */
+	pango_layout_get_pixel_size(l = gtk_widget_create_pango_layout(v, "x"), &i, 0);
+	g_object_unref(l);
+	gtk_text_buffer_create_tag(b, "edit", "paragraph-background", "rgba(255,210,0,0.25)", "left-margin", MARGIN + i, NULL);
+	g_signal_connect(b, "changed", G_CALLBACK(recolor), 0);
 	g_object_set_data(G_OBJECT(b), "hide", gtk_text_buffer_create_tag(b, "hide", "invisible", TRUE, NULL));
 	g_signal_connect(v, "button-release-event", G_CALLBACK(click), hunk);
 	g_signal_connect(v, "button-press-event", G_CALLBACK(press), menu);
@@ -278,6 +308,8 @@ GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 		g_object_set_data(G_OBJECT(v), "top", top);
 		g_signal_connect(v, "motion-notify-event", G_CALLBACK(used), 0);
 		g_signal_connect(v, "scroll-event", G_CALLBACK(used), 0);
+		g_signal_connect(v, "scroll-event", G_CALLBACK(let), 0);
+		g_signal_connect(v, "button-press-event", G_CALLBACK(let), 0);
 		g_signal_connect(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(s)), "changed", G_CALLBACK(grown), v);
 		g_signal_connect(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(s)), "value-changed", G_CALLBACK(moved), v);
 	}
@@ -357,6 +389,10 @@ void diff_files(GtkWidget *view, const char *text)
 	char *t = g_utf8_make_valid(text ? text : "", -1), s[2] = "", x[16], y[16];
 	int files = 0, hdr = 0, len = 0, a = 0, d = 0, add = 0, del = 0, l, k = 0;
 	int *map = g_object_get_data(G_OBJECT(view), "map");
+	/* A new diff ends an edit: what was typed and not saved goes */
+	if (gtk_text_buffer_get_mark(b, "edit")) gtk_text_buffer_delete_mark_by_name(b, "edit"), gtk_text_buffer_delete_mark_by_name(b, "edit-end");
+	g_object_set(view, "editable", FALSE, "cursor-visible", FALSE, NULL);
+	hold = 0;
 	gtk_text_buffer_set_text(b, "", 0);
 	gtk_text_buffer_get_end_iter(b, &it);
 	for (p = t, l = 0;; p = n, l++) {
@@ -417,18 +453,36 @@ int diff_fold(GtkWidget *view, const char *dir, int len, int hide)
 }
 
 /* A whole name is a prefix that has the end of the name in it */
-void diff_goto(GtkWidget *view, const char *path)
+/* A scroll to a line that holds while GTK measures the text, until the view is used */
+static void scroll_to(GtkWidget *view, int l)
 {
 	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(view));
 	GtkTextMark *g;
 	GtkTextIter it;
-	int l = diff_fold(view, path, strlen(path) + 1, 0);
-	if (l < 0) return;
 	gtk_text_buffer_get_iter_at_line(b, &it, l);
 	if ((g = gtk_text_buffer_get_mark(b, "goto"))) gtk_text_buffer_move_mark(b, g, &it);
 	else g = gtk_text_buffer_create_mark(b, "goto", &it, TRUE);
 	jump = 1;
 	gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(view), g, 0, TRUE, 0, 0);
+}
+
+/* The scroll value before a reload, and back to it after */
+double diff_top(GtkWidget *view)
+{
+	return gtk_adjustment_get_value(gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(view)));
+}
+
+void diff_keep(GtkWidget *view, double value)
+{
+	kept = value, hold = 1;
+	gtk_adjustment_set_value(gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(view)), kept);
+	g_idle_add_full(G_PRIORITY_LOW, (GSourceFunc)settle, view, 0);
+}
+
+void diff_goto(GtkWidget *view, const char *path)
+{
+	int l = diff_fold(view, path, strlen(path) + 1, 0);
+	if (l >= 0) scroll_to(view, l);
 }
 
 int diff_lines(GtkWidget *view, int *from, int *to)
@@ -440,3 +494,72 @@ int diff_lines(GtkWidget *view, int *from, int *to)
 	return 1;
 }
 
+
+/* The yellow follows the block as it is typed: typed text takes no tags */
+static void recolor(GtkTextBuffer *b)
+{
+	GtkTextMark *m = gtk_text_buffer_get_mark(b, "edit"), *n = gtk_text_buffer_get_mark(b, "edit-end");
+	GtkTextIter a, z;
+	if (!m || !n) return;
+	gtk_text_buffer_get_iter_at_mark(b, &a, m), gtk_text_buffer_get_iter_at_mark(b, &z, n);
+	gtk_text_iter_forward_char(&z);
+	gtk_text_buffer_apply_tag_by_name(b, "edit", &a, &z);
+}
+
+/* Lines from to of the diff as their file has them, without their + and space, in a yellow block that alone takes
+ * typing. Its last newline stays locked: GTK lets a boundary take text when the character before it is editable */
+void diff_edit(GtkWidget *view, int from, int to)
+{
+	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(view));
+	GtkTextIter a, z, x;
+	GString *s = g_string_new(0);
+	int *m = g_object_get_data(G_OBJECT(view), "map"), i, first = -1, last = -1;
+	char *t;
+	for (i = 0; m && i < *m; i++) {
+		if (m[i + 1] == from && first < 0) first = i;
+		if (m[i + 1] == to) last = i;
+	}
+	if (first < 0 || last < first) {
+		g_string_free(s, TRUE);
+		return;
+	}
+	for (i = first; i <= last; i++) {
+		gtk_text_buffer_get_iter_at_line(b, &a, i);
+		z = a;
+		if (!gtk_text_iter_ends_line(&z)) gtk_text_iter_forward_to_line_end(&z);
+		t = gtk_text_iter_get_text(&a, &z);
+		g_string_append(s, *t ? t + 1 : t), g_string_append_c(s, '\n');
+		g_free(t);
+	}
+	gtk_text_buffer_get_iter_at_line(b, &a, first);
+	gtk_text_buffer_get_iter_at_line(b, &z, last + 1);
+	if (gtk_text_iter_get_line(&z) == last) gtk_text_buffer_get_end_iter(b, &z);
+	gtk_text_buffer_delete(b, &a, &z);
+	gtk_text_buffer_create_mark(b, "edit", &a, TRUE);
+	gtk_text_buffer_insert(b, &a, s->str, s->len);
+	/* Right gravity: what is typed at the end of the last line stays before the mark, in the block */
+	gtk_text_iter_backward_char(&a);
+	gtk_text_buffer_create_mark(b, "edit-end", &a, FALSE);
+	g_string_free(s, TRUE);
+	gtk_text_buffer_get_start_iter(b, &x);
+	gtk_text_buffer_get_iter_at_mark(b, &z, gtk_text_buffer_get_mark(b, "edit"));
+	gtk_text_buffer_apply_tag_by_name(b, "lock", &x, &z);
+	gtk_text_buffer_get_iter_at_mark(b, &x, gtk_text_buffer_get_mark(b, "edit-end"));
+	gtk_text_buffer_get_end_iter(b, &z);
+	gtk_text_buffer_apply_tag_by_name(b, "lock", &x, &z);
+	recolor(b);
+	g_object_set(view, "editable", TRUE, "cursor-visible", TRUE, NULL);
+	gtk_text_buffer_get_iter_at_mark(b, &a, gtk_text_buffer_get_mark(b, "edit"));
+	gtk_text_buffer_place_cursor(b, &a);
+	gtk_widget_grab_focus(view);
+}
+
+/* The block as typed, without its last newline */
+char *diff_edited(GtkWidget *view)
+{
+	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(view));
+	GtkTextIter a, z;
+	gtk_text_buffer_get_iter_at_mark(b, &a, gtk_text_buffer_get_mark(b, "edit"));
+	gtk_text_buffer_get_iter_at_mark(b, &z, gtk_text_buffer_get_mark(b, "edit-end"));
+	return gtk_text_iter_get_text(&a, &z);
+}

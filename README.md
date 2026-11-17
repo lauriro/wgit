@@ -54,8 +54,13 @@ the graph of all branches at the left, the diff of the selected commit at the ri
   Stage or Unstage hunk (the hunk under the pointer),
   Stage or Unstage lines (the selected lines, or with no selection the `+` or `-` line under the pointer),
   Revert hunk and Revert lines (in Unstaged only, asks first),
-  More context and Less context.
+  More context and Less context,
+  Edit lines (the selected `+` and context lines of one hunk, or the `+` line under the pointer).
   Ctrl+C copies the selected text.
+- Edit lines shows those lines as the file has them, in a yellow block that alone takes typing.
+  Save lines or Ctrl+S writes them to the file, Cancel edit or Esc puts them back as they were; nothing is saved on its own.
+  A file that changed since its diff was read is not written.
+  In Staged the edit is staged, and made in the work tree too where it has the same lines.
 - Amend loads the last message and commits with `--amend`.
   While Amend is on, Staged also shows the changes of the last commit.
   Unstage a file, hunk or line to take it out of the last commit.

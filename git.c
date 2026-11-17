@@ -78,6 +78,90 @@ int git(char **out, const char *in, char **argv)
 char *base;
 int context = 3;
 
+/* A file's content with its lines from line on, as a diff showed them, made the text given: the new content, or none
+ * when the lines are no longer there. The last line may have no newline */
+static char *replace(const char *f, int line, const char *was, size_t wlen, const char *text)
+{
+	const char *p;
+	char *s;
+	size_t len = strlen(f), n;
+	int l, nl = 1;
+	FILE *o;
+	for (p = f, l = 1; p && l < line; l++) if ((p = strchr(p, '\n'))) p++;
+	if (!p || ((p + wlen > f + len || strncmp(p, was, wlen)) && (nl = 0, p + wlen - 1 != f + len || strncmp(p, was, wlen - 1))))
+		return 0;
+	o = open_memstream(&s, &n);
+	fwrite(f, 1, p - f, o);
+	fputs(text, o);
+	if (nl) fputc('\n', o), fputs(p + wlen, o);
+	fclose(o);
+	return s;
+}
+
+static char *readall(const char *name)
+{
+	FILE *f = fopen(name, "r");
+	char *s = f ? slurp(fileno(f)) : 0;
+	if (f) fclose(f);
+	return s;
+}
+
+static int writeall(const char *name, const char *s)
+{
+	FILE *f = fopen(name, "w");
+	return !f || (fputs(s, f), fclose(f));
+}
+
+/* Lines from to of a diff, + and context lines of one hunk, made the text given. A hunk's header names the line its
+ * lines start at, the + and context lines above count on. No text only checks that the lines can be edited. The lines
+ * must still be there, or newer work would be lost. A staged diff's lines are the index's: the edit is staged, and made
+ * in the work tree too where it has the same lines */
+int rewrite(const char *d, int from, int to, const char *text, int cached, char **why)
+{
+	const char *p, *e, *q, *path = 0, *err = "Only + and context lines of one hunk can be edited";
+	char *f = 0, *s = 0, *was, *name = 0, *ix = 0, *mode = 0, *hash = 0, *arg = 0;
+	size_t plen = 0, wlen;
+	int l, at = 0, line = 0, hunk = 0, in = -1;
+	FILE *w = open_memstream(&was, &wlen);
+	for (p = d, l = 0; *p && l <= to; p = e + !!*e, l++) {
+		e = p + strcspn(p, "\n");
+		if (!strncmp(p, "diff --", 7)) path = 0, in = -1;
+		else if (in < 0 && !strncmp(p, "+++ b/", 6)) path = p + 6, plen = e - p - 6;
+		else if (!strncmp(p, "@@ ", 3) && (q = strstr(p, " +"))) at = atoi(q + 2), in = ++hunk;
+		else if (l >= from) {
+			if (in < 0 || (*p != '+' && *p != ' ') || (l > from && in != hunk)) break;
+			if (l == from) line = at;
+			fwrite(p + 1, 1, e - p - 1, w), fputc('\n', w);
+		} else if (in >= 0 && (*p == '+' || *p == ' ')) at++;
+	}
+	fclose(w);
+	if (l <= to || !path || !line) goto out;
+	err = 0;
+	if (!text) goto out;
+	f = readall(name = strndup(path, plen));
+	if (cached) {
+		asprintf(&arg, ":%s", name);
+		if (git(&ix, 0, (char *[]){"git", "show", arg, 0}) || !(s = replace(ix, line, was, wlen, text)))
+			err = "The staged file has changed since its diff was read";
+		else if (git(&mode, 0, (char *[]){"git", "ls-files", "-s", "--", name, 0}) || strlen(mode) < 7
+			|| git(&hash, s, (char *[]){"git", "hash-object", "-w", "--no-filters", "--stdin", 0}))
+			err = "The edit cannot be staged";
+		else {
+			free(arg);
+			asprintf(&arg, "%.6s,%s,%s", mode, strtok(hash, "\n"), name);
+			if (git(0, 0, (char *[]){"git", "update-index", "--cacheinfo", arg, 0})) err = "The edit cannot be staged";
+			free(s), s = 0;
+			if (f && (s = replace(f, line, was, wlen, text))) writeall(name, s);
+		}
+	} else if (!f) err = "The file cannot be read";
+	else if (!(s = replace(f, line, was, wlen, text))) err = "The file has changed since its diff was read";
+	else if (writeall(name, s)) err = "The file cannot be written";
+out:
+	free(f), free(s), free(was), free(name), free(ix), free(mode), free(hash), free(arg);
+	*why = err ? strdup(err) : 0;
+	return !!err;
+}
+
 /* A message not yet committed, where git gui keeps one: a message begun in either goes on in the other */
 static FILE *drafts(const char *mode)
 {

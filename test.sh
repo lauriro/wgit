@@ -364,6 +364,51 @@ check 'reads it back' "$(printf 'Begun\n\nnot done')" "$("$T" draft)"
 check 'an empty message removes it' 'gone' "$([ -e .git/GITGUI_MSG ] && echo there || echo gone)"
 check 'nothing kept reads nothing' '' "$("$T" draft)"
 
+# ---- Lines edited in the diff ----
+
+mkdir ../edit && cd ../edit && git init -q && git config user.name t && git config user.email t@t
+printf 'a\nb\nc\nd\ne\n' > f.txt && git add f.txt && git commit -qm init
+printf 'a\nB\nc\nd\nx\ne\n' > f.txt
+# 0 diff, 1 index, 2 ---, 3 +++, 4 @@, 5 ' a', 6 -b, 7 +B, 8 ' c', 9 ' d', 10 +x, 11 ' e'
+"$T" diffs 1 > ../d.txt
+check 'diff lines as counted' '+B' "$(sed -n 8p ../d.txt)"
+can() { "$T" edit "$1" "$2" < ../d.txt > /dev/null && echo yes || echo no; }
+check 'a + line can be edited' yes "$(can 7 7)"
+check 'a - line cannot' no "$(can 6 6)"
+check 'a hunk header cannot' no "$(can 4 5)"
+"$T" edit 7 7 Bee < ../d.txt
+check 'edit one line' "$(printf 'a\nBee\nc\nd\nx\ne')" "$(cat f.txt)"
+"$T" diffs 1 > ../d.txt
+"$T" edit 8 10 "$(printf 'c\nd\nx2\ny')" < ../d.txt
+check 'edit context and + lines, one more' "$(printf 'a\nBee\nc\nd\nx2\ny\ne')" "$(cat f.txt)"
+check 'a line changed since the diff is refused' 'The file has changed since its diff was read' "$("$T" edit 10 10 X < ../d.txt || :)"
+check 'a stale diff leaves the file' "$(printf 'a\nBee\nc\nd\nx2\ny\ne')" "$(cat f.txt)"
+printf 'one\ntwo' > n.txt && git add n.txt && git commit -qm n && printf 'one\nTWO' > n.txt
+"$T" diffs 1 | grep -n '^+TWO' > ../n.txt
+"$T" diffs 1 > ../d.txt
+L=$(($(cut -d: -f1 ../n.txt) - 1))
+"$T" edit "$L" "$L" 'Two' < ../d.txt
+check 'a last line keeps having no newline' "$(printf 'one\nTwo' | od -c)" "$(od -c < n.txt)"
+echo new > u.txt
+"$T" diffs 2 > ../d.txt
+L=$(($(grep -n '^+new' ../d.txt | cut -d: -f1) - 1))
+"$T" edit "$L" "$L" newer < ../d.txt
+check 'an untracked file' newer "$(cat u.txt)"
+
+printf 'p\nq\nr\n' > s.txt && chmod +x s.txt && git add s.txt && git commit -qm s
+printf 'p\nQ\nr\n' > s.txt && git add s.txt
+"$T" diffs 0 > ../d.txt
+L=$(($(grep -n '^+Q' ../d.txt | cut -d: -f1) - 1))
+"$T" edit -c "$L" "$L" Qu < ../d.txt
+check 'a staged edit is staged' "$(printf 'p\nQu\nr')" "$(git show :s.txt)"
+check 'and made in the work tree, which had the same lines' "$(printf 'p\nQu\nr')" "$(cat s.txt)"
+check 'the staged file keeps its mode' 100755 "$(git ls-files -s s.txt | cut -c1-6)"
+printf 'p\nW\nr\n' > s.txt
+"$T" diffs 0 > ../d.txt
+L=$(($(grep -n '^+Qu' ../d.txt | cut -d: -f1) - 1))
+"$T" edit -c "$L" "$L" Qv < ../d.txt
+check 'only the index when the work tree has other lines' "$(printf 'p\nQv\nr | p\nW\nr')" "$(git show :s.txt) | $(cat s.txt)"
+
 # ---- Stat ----
 
 mkdir ../stat && cd ../stat && git init -q && git config user.name t && git config user.email t@t

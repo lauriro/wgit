@@ -16,6 +16,7 @@ int git(char **out, const char *in, char **argv);
 char *parent(void);
 char *draft(void);
 void keep(const char *text);
+int rewrite(const char *diff, int from, int to, const char *text, int cached, char **why);
 char *repo(const char *path);
 void status(void);
 char *diff(Entry *e, int cached);

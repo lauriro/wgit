@@ -67,8 +67,10 @@ static void sel(GtkTreeSelection *s, gpointer redo)
 	GtkTreePath *p, *c;
 	GList *l;
 	const char *q;
-	int k;
+	int k, redid = 0;
+	char *was;
 	if (busy) return;
+	was = g_strdup(cur);
 	l = gtk_tree_selection_get_selected_rows(s, 0);
 	gtk_tree_view_get_cursor(GTK_TREE_VIEW(list), &p, 0);
 	if (l) {
@@ -82,9 +84,12 @@ static void sel(GtkTreeSelection *s, gpointer redo)
 		if (l) shown = sec;
 		free(text);
 		diff_files(dv, text = shown < 0 ? 0 : diffs(shown, ent, nent));
+		redid = 1;
 		for (q = shut; *q; q += strcspn(q + 1, "\n") + 2) hide(q, 1);
 	}
-	if (l && !follow) diff_goto(dv, cur);
+	/* To the file when it is another one or its diff is new: the list says changed again after a refill */
+	if (l && !follow && (redid || !was || strcmp(was, cur))) diff_goto(dv, cur);
+	g_free(was);
 	for (k = 0; k < 4; k++) gtk_widget_set_sensitive(bar[k], l && use[k] >> sec & 1);
 	gtk_tree_path_free(p);
 	g_list_free_full(l, (GDestroyNotify)gtk_tree_path_free);
@@ -369,12 +374,65 @@ static void pick(GtkWidget *w, gpointer p)
 	} else if (k < 2 || sure(g_strdup(ask[k][0]), ask[k][1])) done(apply(&o, text, f, t, k < 2 ? !sec : 2), &o);
 }
 
+/* Lines of the work tree edited in the diff: one block at a time, saved by hand. The lines' place in the diff is kept,
+ * a save reads it from the diff that was shown */
+static int efrom, eto;
+
+static int editing(void)
+{
+	return gtk_text_view_get_editable(GTK_TEXT_VIEW(dv));
+}
+
+static void edit(void)
+{
+	efrom = from, eto = to;
+	diff_edit(dv, from, to);
+}
+
+/* A save that fails keeps the block, so nothing typed is lost */
+static void save(void)
+{
+	char *s = diff_edited(dv), *why;
+	GtkWidget *d;
+	if (rewrite(text, efrom, eto, s, !sec, &why)) {
+		d = gtk_message_dialog_new(GTK_WINDOW(win), GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s", why);
+		gtk_dialog_run(GTK_DIALOG(d));
+		gtk_widget_destroy(d);
+		free(why);
+	} else {
+		/* Where the edit was stays in view: no jump to the file */
+		double top = diff_top(dv);
+		follow = 1, reload(), follow = 0;
+		diff_keep(dv, top);
+	}
+	g_free(s);
+}
+
+static void cancel(void)
+{
+	double top = diff_top(dv);
+	follow = 1, sel(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), list), follow = 0;
+	diff_keep(dv, top);
+}
+
 static void menu(GtkMenu *m, int h)
 {
 	static const char *name[] = {"Stage hunk", "Stage lines", "Revert hunk", "Revert lines", "More context", "Less context", "Unstage hunk", "Unstage lines"};
 	GtkWidget *i;
+	char *why = 0;
 	int k, n = 0, has = diff_lines(dv, &from, &to);
 	hunk = h;
+	if (editing()) {
+		static const char *what[] = {"Save lines", "Cancel edit"};
+		GCallback fn[] = {G_CALLBACK(save), G_CALLBACK(cancel)};
+		for (k = 0; k < 2; k++) {
+			gtk_menu_shell_insert(GTK_MENU_SHELL(m), i = gtk_menu_item_new_with_label(what[k]), n++);
+			g_signal_connect(i, "activate", fn[k], 0);
+		}
+		gtk_menu_shell_insert(GTK_MENU_SHELL(m), gtk_separator_menu_item_new(), n);
+		gtk_widget_show_all(GTK_WIDGET(m));
+		return;
+	}
 	for (k = 0; k < 6; k++) {
 		if ((k == 2 || k == 3) && sec != 1) continue;
 		if (k == 4) gtk_menu_shell_insert(GTK_MENU_SHELL(m), gtk_separator_menu_item_new(), n++);
@@ -383,6 +441,11 @@ static void menu(GtkMenu *m, int h)
 		g_signal_connect(i, "activate", G_CALLBACK(pick), GINT_TO_POINTER(k));
 		gtk_menu_shell_insert(GTK_MENU_SHELL(m), i, n++);
 	}
+	/* Work tree or staged lines: a staged edit is staged */
+	gtk_menu_shell_insert(GTK_MENU_SHELL(m), i = gtk_menu_item_new_with_label("Edit lines"), n++);
+	gtk_widget_set_sensitive(i, has && !rewrite(text, from, to, 0, !sec, &why));
+	free(why);
+	g_signal_connect(i, "activate", G_CALLBACK(edit), 0);
 	gtk_menu_shell_insert(GTK_MENU_SHELL(m), gtk_separator_menu_item_new(), n);
 	gtk_widget_show_all(GTK_WIDGET(m));
 }
@@ -429,7 +492,9 @@ static void last(GtkToggleButton *b)
 static gboolean key(GtkWidget *w, GdkEventKey *ev)
 {
 	if (!gtk_widget_get_mapped(list)) return FALSE;
-	if (ev->keyval == GDK_KEY_F5) reload();
+	if (editing() && ev->keyval == GDK_KEY_Escape) cancel();
+	else if (editing() && ev->keyval == GDK_KEY_s && ev->state & GDK_CONTROL_MASK) save();
+	else if (ev->keyval == GDK_KEY_F5) reload();
 	else if (ev->keyval == GDK_KEY_Delete && gtk_widget_has_focus(list) && gtk_widget_get_sensitive(bar[2])) run(0, GINT_TO_POINTER(2));
 	else if ((ev->keyval == GDK_KEY_Return || ev->keyval == GDK_KEY_KP_Enter) && ev->state & GDK_CONTROL_MASK) submit();
 	else return FALSE;

@@ -53,5 +53,17 @@ int main(int argc, char **argv)
 	g_free(actual);
 	g_free(face);
 	g_print("GTK Stat text, color tags and count font passed\n");
+	/* An edit block: its lines without their marks, typing only there, a new diff ends it. Opening it once
+	 * crashed, the text inserted before its end was marked */
+	GtkWidget *d = diff_view(0, 0, 0);
+	char *edited;
+	diff_files(d, "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n");
+	diff_edit(d, 6, 7);
+	g_assert(gtk_text_view_get_editable(GTK_TEXT_VIEW(d)));
+	g_assert_cmpstr(edited = diff_edited(d), ==, "B\nc");
+	g_free(edited);
+	diff_files(d, "");
+	g_assert(!gtk_text_view_get_editable(GTK_TEXT_VIEW(d)));
+	g_print("GTK diff edit block passed\n");
 	return 0;
 }
