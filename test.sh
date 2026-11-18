@@ -472,6 +472,11 @@ check 'stat file events' '     2  28.6%  png +1-1' "$(stat 30 | sed -n '/Files a
 # An author is a name and an email: one name with two emails is two authors
 git commit -q --allow-empty --author='Ann <another@t>' -m names
 check 'stat author email identity' 2 "$(stat 0 | grep -c 'Ann <')"
+# A dot that ends a sentence or a number in a name starts no extension, as a test's snapshot named by its title
+echo x > 'provision.001. It adds w2'
+echo x > 'net.44 on a 16-bit network'
+by Ann 2026-01-31T11:00:00
+check 'stat no extension from a sentence' 0 "$(stat 0 | sed -n '/Lines changed/,/Most frequently/p' | grep -c 'It adds\|16-bit')"
 
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

@@ -570,13 +570,19 @@ static void name(FILE *f, const char *p)
 	}
 }
 
-/* The extension of a file's name, not of its folder's; a name with none, as Makefile or .gitignore, is one group */
+/* The extension of a file's name, not of its folder's: a short word after its last dot, a letter in it. A name with
+ * none, as Makefile or .gitignore, and one whose last dot ends a sentence or a number, as a test's snapshot named by
+ * its title, are one group */
 static char *extension(char *path)
 {
+	static const char word[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+-";
 	char *p = strrchr(path, '/'), *q;
+	size_t n;
 	p = p ? p + 1 : path;
 	q = strrchr(p, '.');
-	return q && q != p && q[1] ? q + 1 : "(no extension)";
+	if (!q || q == p || !(n = strlen(++q)) || n > 12 || strspn(q, word) < n || strspn(q, word + 52) == n)
+		return "(no extension)";
+	return q;
 }
 
 /* Sections from one log: a heading with its total and lines, then its rows ranked by count, each with its share */
