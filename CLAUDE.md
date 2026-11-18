@@ -4,18 +4,18 @@
 Guidance for a Claude session that takes over this repo.
 It holds what the code and the git history do not say; read the source for the rest.
 
-## What wgit is
+## What gk is
 
-wgit is a Wayland-native git UI for the user's TarkOS laptop:
+gk is a Wayland-native git UI for the user's TarkOS laptop:
 a Debian testing (glibc) desktop with the dwl compositor.
-GTK 3.24 is already in the desktop's stack image, so wgit uses GTK 3 only:
+GTK 3.24 is already in the desktop's stack image, so gk uses GTK 3 only:
 no GTK 4, no libadwaita, no other libraries.
 
 - One window with three views; a `[ Commit | Log | Stat ]` switcher at the top right switches them.
-  `wgit` alone opens the commit view if `git status` lists anything, else the log view.
-- `wgit c[ommit] [path]` opens the commit view, like gitg's.
-  `wgit l[og] [path]` opens the log view, gitk-like.
-  `wgit s[tat] [path]` opens the stat view: totals and authors of a path and a period.
+  `gk` alone opens the commit view if `git status` lists anything, else the log view.
+- `gk c[ommit] [path]` opens the commit view, like gitg's.
+  `gk l[og] [path]` opens the log view, gitk-like.
+  `gk s[tat] [path]` opens the stat view: totals and authors of a path and a period.
   Any unique prefix of a subcommand works.
 
 The desktop has no xdg-desktop-portal and no gsettings or dconf tools.
@@ -30,14 +30,14 @@ and `SettingChanged` on `/org/freedesktop/portal/desktop`.
 - `diff-view.c`, `diff-view.h`: the coloured diff view, shared by both views.
   `diff_view()` returns the text view; its parent is the scrolled window to pack.
 - `commit.c`, `log.c`, `stat.c`: the three views. `ui.c`, `ui.h`: the window, the theme and the saved sizes.
-- `wgit.c`: the subcommands. `test.c`, `test.sh`: the test binary `wgit-test` and its script.
-- `Containerfile`: the local build image `wgit-build`.
+- `gk.c`: the subcommands. `test.c`, `test.sh`: the test binary `gk-test` and its script.
+- `Containerfile`: the local build image `gk-build`.
 
 Why some things are as they are:
 
 - Every git run gets `GIT_LITERAL_PATHSPECS=1`, so names with `:` or `*` are plain paths,
   and `core.quotePath=false`, so a diff names a file as `git status -z` does.
-- `status()` fills the shared `ent` and `nent`. `wgit` alone runs it once to pick the view;
+- `status()` fills the shared `ent` and `nent`. `gk` alone runs it once to pick the view;
   the commit view takes that result when it is built and runs `status()` itself only when `nent` is 0.
 - Untracked files go as intent-to-add into a temporary index (`GIT_INDEX_FILE`),
   so two git runs give the diff of any number of them.
@@ -95,18 +95,18 @@ On this host `git` in the shell is a function that may fail; use `command git`.
 Plain image, slow, the command to give the user:
 
 ```sh
-cd /home/lauri/code/litejs/wgit && podman run --rm -v "$PWD:$PWD" -w "$PWD" docker.io/library/debian:testing-slim sh -c 'apt-get update -qq && apt-get install -y -qq gcc make pkg-config libgtk-3-dev git >/dev/null && make && make test'
+cd /home/lauri/code/litejs/gk && podman run --rm -v "$PWD:$PWD" -w "$PWD" docker.io/library/debian:testing-slim sh -c 'apt-get update -qq && apt-get install -y -qq gcc make pkg-config libgtk-3-dev git >/dev/null && make && make test'
 ```
 
 Local image, fast:
 
 ```sh
-podman build -t wgit-build .
-podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build make wgit test
+podman build -t gk-build .
+podman run --rm -v "$PWD:$PWD" -w "$PWD" gk-build make gk test
 ```
 
-`make test` builds `wgit-test` and runs `test.sh`; the last line is `62 passed, 0 failed`.
-The test names are in `test.sh`, the commands of `wgit-test` in `test.c`.
+`make test` builds `gk-test` and runs `test.sh`; the last line is `62 passed, 0 failed`.
+The test names are in `test.sh`, the commands of `gk-test` in `test.c`.
 
 Size:
 
@@ -118,14 +118,14 @@ Size:
 ## Checking the window
 
 The GUI cannot be seen here. Check it under Xvfb in a throwaway container, driven with xdotool.
-Build the image in the scratchpad, not in the repo, and delete it after with `podman rmi wgit-xv`:
+Build the image in the scratchpad, not in the repo, and delete it after with `podman rmi gk-xv`:
 
 ```sh
-printf 'FROM wgit-build\nRUN apt-get update -qq && apt-get install -y -qq --no-install-recommends xvfb xauth xdotool imagemagick x11-apps fonts-dejavu-core adwaita-icon-theme >/dev/null\n' > Containerfile
-podman build -q -t wgit-xv .
+printf 'FROM gk-build\nRUN apt-get update -qq && apt-get install -y -qq --no-install-recommends xvfb xauth xdotool imagemagick x11-apps fonts-dejavu-core adwaita-icon-theme >/dev/null\n' > Containerfile
+podman build -q -t gk-xv .
 ```
 
-A script `smoke.sh`, run as `podman run --rm -v "$PWD:$PWD" -w "$PWD" -v "$S:$S" wgit-xv sh -c "make -s && sh $S/smoke.sh $PWD/wgit $S"`:
+A script `smoke.sh`, run as `podman run --rm -v "$PWD:$PWD" -w "$PWD" -v "$S:$S" gk-xv sh -c "make -s && sh $S/smoke.sh $PWD/gk $S"`:
 
 ```sh
 set -e
@@ -148,7 +148,7 @@ git log --stat -1 >> $O/cached.txt
 xdotool mousemove 360 676 click 1; sleep 1; shot 8
 ```
 
-The window opens at 0,0 without decorations, 1000x700, when `~/.local/state/wgit` does not exist.
+The window opens at 0,0 without decorations, 1000x700, when `~/.local/state/gk` does not exist.
 Take a screenshot first and read the PNG with the Read tool to find the positions.
 `log.txt` must stay empty: a wrong property name gives a GTK warning there, not a build error.
 In the commit view, list rows are 23 px apart from y 57, the bar buttons are at y 22
@@ -176,7 +176,7 @@ and start a small GDBus mock that owns `org.freedesktop.portal.Desktop` like tar
 The global rules for style, commits and language apply. For this repo:
 
 - The shortest general code that does the job, no frameworks.
-  Measure the stripped binary (`ls -l wgit` after `make`) and report its size; it was 64,168 bytes.
+  Measure the stripped binary (`ls -l gk` after `make`) and report its size; it was 64,168 bytes.
   The size changes in steps of 4096 bytes, so count the imports of a change.
 - Commit scopes are the areas: `git:`, `diff:`, `log:`, `build:`, `docs:`.
   End the message with the `Co-Authored-By` line of the model that did the work.

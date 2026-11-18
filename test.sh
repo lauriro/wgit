@@ -2,7 +2,7 @@
 #!/bin/sh
 set -eu
 
-T=$(cd "$(dirname "$0")" && pwd)/wgit-test
+T=$(cd "$(dirname "$0")" && pwd)/gk-test
 D=$(mktemp -d)
 trap 'rm -rf "$D"' EXIT
 mkdir "$D/main"

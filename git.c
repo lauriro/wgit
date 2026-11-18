@@ -271,7 +271,7 @@ char *diff(Entry *e, int cached)
 /* Untracked files go into a temporary index as intent-to-add, so one git diff shows them all as new files. */
 char *diffs(int sec, Entry *e, int n)
 {
-	char t[] = "/tmp/wgit-XXXXXX", x[24], *s;
+	char t[] = "/tmp/gk-XXXXXX", x[24], *s;
 	size_t len;
 	FILE *f;
 	if (sec < 2) return diff(0, !sec);

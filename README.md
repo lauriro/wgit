@@ -3,7 +3,7 @@
 [2]: https://www.buymeacoffee.com/lauriro
 
 
-LiteJS Wgit &ndash; [![Buy Me A Tea][1]][2]
+LiteJS gk &ndash; [![Buy Me A Tea][1]][2]
 ==========
 
 A small git UI for Wayland, written in C with GTK 3 only.
@@ -12,20 +12,20 @@ A small git UI for Wayland, written in C with GTK 3 only.
 
 ```sh
 $ make
-$ ./wgit
+$ ./gk
 ```
 
-wgit is one window with three views, and the `[ Commit | Log | Stat ]` switcher at the top right switches between them.
-`wgit` alone opens the commit view when the repo has changes, else the log view.
+gk is one window with three views, and the `[ Commit | Log | Stat ]` switcher at the top right switches between them.
+`gk` alone opens the commit view when the repo has changes, else the log view.
 
-`wgit commit` (or `wgit c`, any unique prefix) opens the commit view, like gitg's:
+`gk commit` (or `gk c`, any unique prefix) opens the commit view, like gitg's:
 staged, unstaged and untracked files in one list on the left,
 the diff of the selected file's section on the right, with a title per file,
 a message box and Rescan and Commit buttons below.
-`wgit log` (or `wgit l`) opens the log view, like gitk:
+`gk log` (or `gk l`) opens the log view, like gitk:
 the graph of all branches at the left, the diff of the selected commit at the right, its details below.
-`wgit stat` (or `wgit s`) opens the stat view: the commits, lines and authors of a path and a period.
-`wgit c <path>`, `wgit l <path>` and `wgit s <path>` work in the repo of that path.
+`gk stat` (or `gk s`) opens the stat view: the commits, lines and authors of a path and a period.
+`gk c <path>`, `gk l <path>` and `gk s <path>` work in the repo of that path.
 
 
 ## Commit view
@@ -64,11 +64,11 @@ the graph of all branches at the left, the diff of the selected commit at the ri
 - Amend loads the last message and commits with `--amend`.
   While Amend is on, Staged also shows the changes of the last commit.
   Unstage a file, hunk or line to take it out of the last commit.
-- The × at the top right closes wgit without a commit.
+- The × at the top right closes gk without a commit.
 - Drag the line over the message box to make the box higher.
-- wgit remembers the window size and the pane positions of each view in `~/.local/state/wgit`.
+- gk remembers the window size and the pane positions of each view in `~/.local/state/gk`.
   It does not save the size of a maximized or fullscreen window.
-- wgit follows the dark or light colour scheme of the desktop (the freedesktop `color-scheme` setting)
+- gk follows the dark or light colour scheme of the desktop (the freedesktop `color-scheme` setting)
   and switches while it runs.
 
 ### Keys
@@ -133,21 +133,21 @@ podman run --rm -v "$PWD:$PWD" -w "$PWD" docker.io/library/debian:testing-slim s
 For faster builds, make the local image once from `Containerfile`:
 
 ```sh
-podman build -t wgit-build .
-podman run --rm -v "$PWD:$PWD" -w "$PWD" wgit-build sh -c 'make && make test'
+podman build -t gk-build .
+podman run --rm -v "$PWD:$PWD" -w "$PWD" gk-build sh -c 'make && make test'
 ```
 
-`make test` builds `wgit-test`,
+`make test` builds `gk-test`,
 a binary over the git plumbing in `git.c` without GTK,
 and `test.sh` runs it against throwaway repos.
 
 - `git.c` runs git, parses the status and builds hunk and line patches. No GTK.
-- `diff-view.c` shows a diff, shared with a later `wgit log`.
+- `diff-view.c` shows a diff, shared with a later `gk log`.
 - `commit.c` is the commit view.
 - `log.c` is the log view.
 - `stat.c` is the stat view; `stats()` in `git.c` makes its text.
 - `ui.c` is the window: start, colour scheme, saved layout and the switch between the views.
-- `wgit.c` picks the subcommand.
+- `gk.c` picks the subcommand.
 
 
 > Copyright (c) 2026 Lauri Rooden &lt;lauri@rooden.ee&gt;\
