@@ -43,6 +43,10 @@ int main(int argc, char **argv)
 		return 0;
 	}
 	if (argc == 3 && !strcmp(argv[1], "keep")) return keep(argv[2]), 0;
+	if (argc == 3 && !strcmp(argv[1], "deepen")) {
+		if ((r = deepen(&o, atoi(argv[2])))) fputs(o, stderr);
+		return !!r;
+	}
 	if (argc > 3 && !strcmp(argv[1], "edit")) {
 		int c = !strcmp(argv[2], "-c");
 		char *d = 0, *why;

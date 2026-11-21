@@ -367,9 +367,12 @@ check 'untracked diff leaves default index alone' '' "$(git diff --cached --name
 mkdir ../deep && cd ../deep && git init -q && git config user.name t && git config user.email t@t
 echo 1 > a.txt && git add a.txt && git commit -qm one
 echo 2 > a.txt && git commit -qam two
+echo 3 > a.txt && git commit -qam three
 check 'root of a whole clone is no edge' 0 "$("$T" log | grep -c '(edge)')"
 git clone -q --depth 1 "file://$PWD" ../shallow && cd ../shallow
-check 'edge of a shallow clone' 'two (edge)' "$("$T" log | cut -f3)"
+check 'edge of a shallow clone' 'three (edge)' "$("$T" log | cut -f3)"
+"$T" deepen 1
+check 'deepen moves the edge one commit down' 'three two (edge)' "$("$T" log | cut -f3 | tr '\n' ' ' | sed 's/ $//')"
 
 # ---- Message not yet committed ----
 

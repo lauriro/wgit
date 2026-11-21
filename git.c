@@ -25,7 +25,8 @@ static char *slurp(int fd)
 	return s;
 }
 
-/* The pipes close on exec: a job that a hook leaves in the background must not hold the output open. */
+/* The pipes close on exec: a job that a hook leaves in the background must not hold the output open.
+ * The window has no terminal, so a fetch that asks for a password fails instead of waiting. */
 static int run(char **out, const char *in, size_t len, char **argv, const char *index)
 {
 	int i[2], o[2], st;
@@ -43,6 +44,7 @@ static int run(char **out, const char *in, size_t len, char **argv, const char *
 		dup2(fileno(e), 2);
 		if (index) setenv("GIT_INDEX_FILE", index, 1);
 		setenv("GIT_LITERAL_PATHSPECS", "1", 1);
+		setenv("GIT_TERMINAL_PROMPT", "0", 1);
 		setenv("GIT_CONFIG_COUNT", "1", 1);
 		setenv("GIT_CONFIG_KEY_0", "core.quotePath", 1);
 		setenv("GIT_CONFIG_VALUE_0", "false", 1);
@@ -442,6 +444,13 @@ int ignore(char **out, char *add, int sort)
 int commit(char **out, const char *msg, int amend)
 {
 	return git(out, msg, (char *[]){"git", "commit", "-q", "-F", "-", amend ? "--amend" : 0, 0});
+}
+
+int deepen(char **out, int n)
+{
+	char d[24];
+	snprintf(d, sizeof d, "--deepen=%d", n);
+	return git(out, 0, (char *[]){"git", "fetch", "-q", d, 0});
 }
 
 /* The commits at the edge of a shallow clone, one full hash a line: their parents are not here, so git shows each
