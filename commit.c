@@ -6,7 +6,8 @@
 #include "git.h"
 #include "ui.h"
 
-static GtkWidget *list, *dv, *bar[4], *amend;
+static GtkWidget *list, *dv, *bar[4], *amend, *pop;
+static GMenu *pops;
 static GtkTextBuffer *msg;
 static GtkTreeStore *store;
 static const char *head[] = {"Staged", "Unstaged", "Untracked"}, *arrow[] = {"pan-down-symbolic", "pan-end-symbolic"};
@@ -196,14 +197,10 @@ static void reload(void)
 	fill();
 }
 
+/* The list reloads at once, the error stays open over it */
 static void done(int r, char **o)
 {
-	GtkWidget *d;
-	if (r && *o) {
-		d = gtk_message_dialog_new(GTK_WINDOW(win), GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s", *o);
-		gtk_dialog_run(GTK_DIALOG(d));
-		gtk_widget_destroy(d);
-	}
+	if (r && *o) alert(*o);
 	free(*o);
 	reload();
 }
@@ -219,51 +216,84 @@ static gboolean can(GtkTreeSelection *s, GtkTreeModel *m, GtkTreePath *p, gboole
 	return r;
 }
 
-static int sure(char *q, const char *yes)
+/* A question is answered later: the job waits in job, njob, jop or jfrom, jto. The dialogs are modal, so there is
+ * one at a time */
+static Entry **job;
+static int njob, jop, jfrom, jto;
+
+static void answered(GObject *d, GAsyncResult *r, gpointer fn)
 {
-	GtkWidget *d = gtk_message_dialog_new(GTK_WINDOW(win), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_CANCEL, "%s", q);
-	int r;
+	if (gtk_alert_dialog_choose_finish(GTK_ALERT_DIALOG(d), r, 0) == 1) ((void (*)(void))fn)();
+}
+
+static void sure(char *q, const char *yes, void (*fn)(void))
+{
+	GtkAlertDialog *d = gtk_alert_dialog_new("%s", q);
 	g_free(q);
-	g_object_set(d, "secondary-text", "This cannot be undone.", NULL);
-	gtk_dialog_add_button(GTK_DIALOG(d), yes, GTK_RESPONSE_ACCEPT);
-	r = gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT;
-	gtk_widget_destroy(d);
-	return r;
+	g_object_set(d, "detail", "This cannot be undone.", "buttons", (const char *[]){"_Cancel", yes, 0}, "cancel-button", 0, NULL);
+	gtk_alert_dialog_choose(d, GTK_WINDOW(win), 0, answered, fn);
+	g_object_unref(d);
+}
+
+static GtkWidget *sorter;
+static GtkTextBuffer *pats;
+
+/* Sort is kept however the dialog ends, as GTK 3's dialog did */
+static gboolean skipped(GtkWidget *d, gpointer ok)
+{
+	char *p, *o;
+	sorted = gtk_check_button_get_active(GTK_CHECK_BUTTON(sorter));
+	if (!ok) return FALSE;
+	g_object_get(pats, "text", &p, NULL);
+	gtk_window_destroy(GTK_WINDOW(d));
+	done(ignore(&o, g_strstrip(p), sorted), &o);
+	g_free(p);
+	return FALSE;
 }
 
 static void skip(Entry **e, int n)
 {
-	GtkWidget *d = gtk_dialog_new_with_buttons("Ignore", GTK_WINDOW(win), GTK_DIALOG_MODAL, "_Cancel", GTK_RESPONSE_CANCEL, "_Ignore", GTK_RESPONSE_ACCEPT, NULL);
-	GtkWidget *c = gtk_dialog_get_content_area(GTK_DIALOG(d)), *t = g_object_new(GTK_TYPE_TEXT_VIEW, "monospace", TRUE, NULL), *s = gtk_check_button_new_with_label("Sort .gitignore"), *w;
-	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(t));
-	char *p = patterns(e, n), *o;
-	int r;
-	gtk_text_buffer_set_text(b, p, -1);
+	GtkWidget *d = g_object_new(GTK_TYPE_WINDOW, "title", "Ignore", "transient-for", win, "modal", TRUE, NULL),
+		*c = margin(gtk_box_new(GTK_ORIENTATION_VERTICAL, 6)), *t = g_object_new(GTK_TYPE_TEXT_VIEW, "monospace", TRUE, NULL),
+		*h = g_object_new(GTK_TYPE_BOX, "spacing", 6, "halign", GTK_ALIGN_END, NULL), *w;
+	GtkEventController *k = gtk_shortcut_controller_new();
+	char *p = patterns(e, n);
+	gtk_text_buffer_set_text(pats = gtk_text_view_get_buffer(GTK_TEXT_VIEW(t)), p, -1);
 	free(p);
-	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(s), sorted);
-	g_object_set(c, "spacing", 6, "border-width", 6, NULL);
-	gtk_box_pack_start(GTK_BOX(c), g_object_new(GTK_TYPE_LABEL, "label", "Add to .gitignore, one pattern per line:", "xalign", 0., NULL), FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(c), w = scroll(t), TRUE, TRUE, 0);
+	sorter = gtk_check_button_new_with_label("Sort .gitignore");
+	gtk_check_button_set_active(GTK_CHECK_BUTTON(sorter), sorted);
+	gtk_box_append(GTK_BOX(c), g_object_new(GTK_TYPE_LABEL, "label", "Add to .gitignore, one pattern per line:", "xalign", 0., NULL));
+	gtk_box_append(GTK_BOX(c), w = scroll(t));
 	gtk_widget_set_size_request(w, 400, 120);
-	gtk_box_pack_start(GTK_BOX(c), s, FALSE, FALSE, 0);
-	gtk_widget_show_all(c);
-	r = gtk_dialog_run(GTK_DIALOG(d));
-	sorted = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(s));
-	g_object_get(b, "text", &p, NULL);
-	gtk_widget_destroy(d);
-	if (r == GTK_RESPONSE_ACCEPT) done(ignore(&o, g_strstrip(p), sorted), &o);
-	g_free(p);
+	gtk_box_append(GTK_BOX(c), sorter);
+	gtk_box_append(GTK_BOX(h), w = gtk_button_new_with_mnemonic("_Cancel"));
+	g_signal_connect_swapped(w, "clicked", G_CALLBACK(gtk_window_close), d);
+	gtk_box_append(GTK_BOX(h), w = gtk_button_new_with_mnemonic("_Ignore"));
+	g_signal_connect_swapped(w, "clicked", G_CALLBACK(skipped), d);
+	gtk_box_append(GTK_BOX(c), h);
+	g_signal_connect(d, "close-request", G_CALLBACK(skipped), 0);
+	gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(k), gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_Escape, 0), gtk_named_action_new("window.close")));
+	gtk_widget_add_controller(d, k);
+	gtk_window_set_child(GTK_WINDOW(d), c);
+	gtk_window_present(GTK_WINDOW(d));
+}
+
+static void filed(void)
+{
+	char *o;
+	done(files(&o, jop, job, njob), &o);
 }
 
 static void go(Entry **e, int n, int op, int k)
 {
-	char *o;
+	free(job);
+	job = e, njob = n, jop = op;
 	if (n && op == 3) skip(e, n);
-	else if (n && (op < 2 || sure(g_strdup_printf(ask[k > 1][0], n, n > 1 ? "s" : ""), ask[k > 1][1]))) done(files(&o, op, e, n), &o);
-	free(e);
+	else if (n && op > 1) sure(g_strdup_printf(ask[k > 1][0], n, n > 1 ? "s" : ""), ask[k > 1][1], filed);
+	else if (n) filed();
 }
 
-static void run(GtkWidget *w, gpointer k)
+static void run(gpointer k)
 {
 	GtkTreeSelection *s = gtk_tree_view_get_selection(GTK_TREE_VIEW(list));
 	GList *l = gtk_tree_selection_get_selected_rows(s, 0), *p;
@@ -276,7 +306,7 @@ static void run(GtkWidget *w, gpointer k)
 
 static void act(GtkTreeView *v, GtkTreePath *p)
 {
-	if (file(p) >= 0) run(0, GINT_TO_POINTER(!sec));
+	if (file(p) >= 0) run(GINT_TO_POINTER(!sec));
 	else if (!gtk_tree_view_collapse_row(v, p)) gtk_tree_view_expand_row(v, p, FALSE);
 }
 
@@ -310,7 +340,7 @@ static void fold(GtkTreeView *v, GtkTreeIter *it, GtkTreePath *p, gpointer c)
 	g_free(key);
 }
 
-static void all(GtkWidget *w, gpointer k)
+static void all(gpointer k)
 {
 	Entry **e = malloc(nent * sizeof *e + 1);
 	int i, n = 0, len = strlen(spot) - 4;
@@ -319,40 +349,46 @@ static void all(GtkWidget *w, gpointer k)
 }
 
 /* A file has the menu of its section without "all": it acts on the selected files, as the buttons do */
-static void heads(GtkTreePath *p, GdkEventButton *ev)
+/* The popover's parent is the list's box: a tree view does not place a popover */
+static void heads(GtkTreePath *p, GdkEvent *ev)
 {
-	GtkWidget *m = gtk_menu_new(), *i;
 	GtkTreeIter it;
-	char *s;
+	double x, y;
+	char *s, *a;
 	int k, n, f = file(p) >= 0;
 	part = *gtk_tree_path_get_indices(p);
 	gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &it, p);
 	g_free(spot);
 	gtk_tree_model_get(GTK_TREE_MODEL(store), &it, 3, &n, 4, &spot, -1);
+	g_menu_remove_all(pops);
 	for (k = 0; k < 4; k++) if (use[k] >> part & 1) {
 		s = g_strdup_printf("%s%s", k == 2 && part == 2 ? "Delete" : verb[k], &" all"[4 * f]);
-		i = gtk_menu_item_new_with_label(s);
+		a = g_strdup_printf("v.%s(%d)", f ? "run" : n > 0 ? "all" : "no", k);
+		g_menu_append(pops, s, a);
+		g_free(a);
 		g_free(s);
-		gtk_widget_set_sensitive(i, f || n > 0);
-		g_signal_connect(i, "activate", f ? G_CALLBACK(run) : G_CALLBACK(all), GINT_TO_POINTER(k));
-		gtk_menu_shell_insert(GTK_MENU_SHELL(m), i, -1);
 	}
-	g_signal_connect(m, "selection-done", G_CALLBACK(gtk_widget_destroy), 0);
-	gtk_widget_show_all(m);
-	gtk_menu_popup_at_pointer(GTK_MENU(m), (GdkEvent *)ev);
+	local(gtk_widget_get_parent(pop), ev, &x, &y);
+	gtk_popover_set_pointing_to(GTK_POPOVER(pop), &(GdkRectangle){x, y, 1, 1});
+	gtk_popover_popup(GTK_POPOVER(pop));
 }
 
-static gboolean press(GtkTreeView *v, GdkEventButton *ev)
+static gboolean press(GtkEventController *c, GdkEvent *ev)
 {
+	GtkTreeView *v = GTK_TREE_VIEW(list);
 	GtkTreePath *p;
-	int r = 0;
-	if (gtk_tree_view_get_path_at_pos(v, ev->x, ev->y, &p, 0, 0, 0)) {
+	double x, y;
+	int bx, by, r = 0;
+	if (gdk_event_get_event_type(ev) != GDK_BUTTON_PRESS) return FALSE;
+	local(list, ev, &x, &y);
+	gtk_tree_view_convert_widget_to_bin_window_coords(v, x, y, &bx, &by);
+	if (gtk_tree_view_get_path_at_pos(v, bx, by, &p, 0, 0, 0)) {
 		r = file(p) < 0;
-		if (ev->type == GDK_BUTTON_PRESS && ev->button == 3) {
+		if (gdk_button_event_get_button(ev) == 3) {
 			if (!r && !gtk_tree_selection_path_is_selected(gtk_tree_view_get_selection(v), p)) gtk_tree_view_set_cursor(v, p, 0, FALSE);
 			heads(p, ev);
 			r = 1;
-		} else if (r && ev->type == GDK_BUTTON_PRESS) act(v, p);
+		} else if (r) act(v, p);
 		gtk_tree_path_free(p);
 	}
 	return r;
@@ -364,14 +400,22 @@ static void lines(int from, int to)
 	if (text) done(apply(&o, text, from, to, !sec), &o);
 }
 
-static void pick(GtkWidget *w, gpointer p)
+static void reverted(void)
 {
-	int k = GPOINTER_TO_INT(p), f = k & 1 ? from : hunk, t = k & 1 ? to : -1;
 	char *o;
+	done(apply(&o, text, jfrom, jto, 2), &o);
+}
+
+static void pick(gpointer p)
+{
+	int k = GPOINTER_TO_INT(p);
+	char *o;
+	jfrom = k & 1 ? from : hunk, jto = k & 1 ? to : -1;
 	if (k > 3) {
 		context = k > 4 ? MAX(1, context / 2) : 2 * context;
 		sel(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), list);
-	} else if (k < 2 || sure(g_strdup(ask[k][0]), ask[k][1])) done(apply(&o, text, f, t, k < 2 ? !sec : 2), &o);
+	} else if (k < 2) done(apply(&o, text, jfrom, jto, !sec), &o);
+	else sure(g_strdup(ask[k][0]), ask[k][1], reverted);
 }
 
 /* Lines of the work tree edited in the diff: one block at a time, saved by hand. The lines' place in the diff is kept,
@@ -393,11 +437,8 @@ static void edit(void)
 static void save(void)
 {
 	char *s = diff_edited(dv), *why;
-	GtkWidget *d;
 	if (rewrite(text, efrom, eto, s, !sec, &why)) {
-		d = gtk_message_dialog_new(GTK_WINDOW(win), GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s", why);
-		gtk_dialog_run(GTK_DIALOG(d));
-		gtk_widget_destroy(d);
+		alert(why);
 		free(why);
 	} else {
 		/* Where the edit was stays in view: no jump to the file */
@@ -415,45 +456,36 @@ static void cancel(void)
 	diff_keep(dv, top);
 }
 
-static void menu(GtkMenu *m, int h)
+/* The groups are sections, which the menu parts with lines */
+static void menu(GMenu *m, int h)
 {
 	static const char *name[] = {"Stage hunk", "Stage lines", "Revert hunk", "Revert lines", "More context", "Less context", "Unstage hunk", "Unstage lines"};
-	GtkWidget *i;
-	char *why = 0;
-	int k, n = 0, has = diff_lines(dv, &from, &to);
+	GMenu *s = g_menu_new();
+	char *why = 0, a[16];
+	int k, has = diff_lines(dv, &from, &to);
 	hunk = h;
 	if (editing()) {
-		static const char *what[] = {"Save lines", "Cancel edit"};
-		GCallback fn[] = {G_CALLBACK(save), G_CALLBACK(cancel)};
-		for (k = 0; k < 2; k++) {
-			gtk_menu_shell_insert(GTK_MENU_SHELL(m), i = gtk_menu_item_new_with_label(what[k]), n++);
-			g_signal_connect(i, "activate", fn[k], 0);
+		g_menu_append(s, "Save lines", "v.save(0)");
+		g_menu_append(s, "Cancel edit", "v.cancel(0)");
+	} else {
+		for (k = 0; k < 6; k++) {
+			if ((k == 2 || k == 3) && sec != 1) continue;
+			if (k == 4) g_menu_append_section(m, 0, G_MENU_MODEL(s)), g_object_unref(s), s = g_menu_new();
+			snprintf(a, sizeof a, "v.%s(%d)", (k < 4 ? (k & 1 ? has : h >= 0) : k == 4 || context > 1) ? "pick" : "no", k);
+			g_menu_append(s, name[k < 2 && !sec ? k + 6 : k], a);
 		}
-		gtk_menu_shell_insert(GTK_MENU_SHELL(m), gtk_separator_menu_item_new(), n);
-		gtk_widget_show_all(GTK_WIDGET(m));
-		return;
+		/* Work tree or staged lines: a staged edit is staged */
+		g_menu_append(s, "Edit lines", has && !rewrite(text, from, to, 0, !sec, &why) ? "v.edit(0)" : "v.no(0)");
+		free(why);
 	}
-	for (k = 0; k < 6; k++) {
-		if ((k == 2 || k == 3) && sec != 1) continue;
-		if (k == 4) gtk_menu_shell_insert(GTK_MENU_SHELL(m), gtk_separator_menu_item_new(), n++);
-		i = gtk_menu_item_new_with_label(name[k < 2 && !sec ? k + 6 : k]);
-		gtk_widget_set_sensitive(i, k < 4 ? (k & 1 ? has : h >= 0) : k == 4 || context > 1);
-		g_signal_connect(i, "activate", G_CALLBACK(pick), GINT_TO_POINTER(k));
-		gtk_menu_shell_insert(GTK_MENU_SHELL(m), i, n++);
-	}
-	/* Work tree or staged lines: a staged edit is staged */
-	gtk_menu_shell_insert(GTK_MENU_SHELL(m), i = gtk_menu_item_new_with_label("Edit lines"), n++);
-	gtk_widget_set_sensitive(i, has && !rewrite(text, from, to, 0, !sec, &why));
-	free(why);
-	g_signal_connect(i, "activate", G_CALLBACK(edit), 0);
-	gtk_menu_shell_insert(GTK_MENU_SHELL(m), gtk_separator_menu_item_new(), n);
-	gtk_widget_show_all(GTK_WIDGET(m));
+	g_menu_append_section(m, 0, G_MENU_MODEL(s));
+	g_object_unref(s);
 }
 
 static void submit(void)
 {
 	char *s, *o;
-	int r, a = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(amend));
+	int r, a = gtk_check_button_get_active(GTK_CHECK_BUTTON(amend));
 	g_object_get(msg, "text", &s, NULL);
 	if (!(r = commit(&o, s, a))) gtk_text_buffer_set_text(msg, "", 0), keep("");
 	g_free(s);
@@ -461,7 +493,7 @@ static void submit(void)
 	if (r || !a) done(r, &o);
 	else {
 		free(o);
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(amend), FALSE);
+		gtk_check_button_set_active(GTK_CHECK_BUTTON(amend), FALSE);
 	}
 }
 
@@ -469,19 +501,19 @@ static void submit(void)
 static gboolean closing(void)
 {
 	char *s;
-	if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(amend))) return FALSE;
+	if (gtk_check_button_get_active(GTK_CHECK_BUTTON(amend))) return FALSE;
 	g_object_get(msg, "text", &s, NULL);
 	keep(s);
 	g_free(s);
 	return FALSE;
 }
 
-static void last(GtkToggleButton *b)
+static void last(GtkCheckButton *b)
 {
 	char *o;
 	free(base);
 	base = 0;
-	if (gtk_toggle_button_get_active(b) && !git(&o, 0, (char *[]){"git", "log", "-1", "--format=%B", 0})) {
+	if (gtk_check_button_get_active(b) && !git(&o, 0, (char *[]){"git", "log", "-1", "--format=%B", 0})) {
 		gtk_text_buffer_set_text(msg, g_strchomp(o), -1);
 		free(o);
 		base = parent();
@@ -498,27 +530,31 @@ static void changed(void)
 	go(e, n, 0, 1);
 }
 
-static gboolean key(GtkWidget *w, GdkEventKey *ev)
+/* In the capture phase, so the window sees a key before the focused widget, as GTK 3's key-press-event on it did */
+static gboolean key(GtkEventControllerKey *c, guint k, guint code, GdkModifierType m)
 {
+	int ctl = m & GDK_CONTROL_MASK;
 	if (!gtk_widget_get_mapped(list)) return FALSE;
-	if (editing() && ev->keyval == GDK_KEY_Escape) cancel();
-	else if (editing() && ev->keyval == GDK_KEY_s && ev->state & GDK_CONTROL_MASK) save();
-	else if (ev->keyval == GDK_KEY_F5) reload();
+	if (editing() && k == GDK_KEY_Escape) cancel();
+	else if (editing() && k == GDK_KEY_s && ctl) save();
+	else if (k == GDK_KEY_F5) reload();
 	/* As git citool: Ctrl+T stages, Ctrl+U unstages the selected files, where the buttons can */
-	else if ((ev->keyval == GDK_KEY_t || ev->keyval == GDK_KEY_u) && ev->state & GDK_CONTROL_MASK) {
-		if (gtk_widget_get_sensitive(bar[ev->keyval == GDK_KEY_u])) run(0, GINT_TO_POINTER(ev->keyval == GDK_KEY_u));
-	} else if (ev->keyval == GDK_KEY_i && ev->state & GDK_CONTROL_MASK) changed();
-	else if (ev->keyval == GDK_KEY_Delete && gtk_widget_has_focus(list) && gtk_widget_get_sensitive(bar[2])) run(0, GINT_TO_POINTER(2));
-	else if ((ev->keyval == GDK_KEY_Return || ev->keyval == GDK_KEY_KP_Enter) && ev->state & GDK_CONTROL_MASK) submit();
+	else if ((k == GDK_KEY_t || k == GDK_KEY_u) && ctl) {
+		if (gtk_widget_get_sensitive(bar[k == GDK_KEY_u])) run(GINT_TO_POINTER(k == GDK_KEY_u));
+	} else if (k == GDK_KEY_i && ctl) changed();
+	else if (k == GDK_KEY_Delete && gtk_widget_has_focus(list) && gtk_widget_get_sensitive(bar[2])) run(GINT_TO_POINTER(2));
+	else if ((k == GDK_KEY_Return || k == GDK_KEY_KP_Enter) && ctl) submit();
 	else return FALSE;
 	return TRUE;
 }
 
 GtkWidget *commit_view(GtkWidget **pane)
 {
-	static const char *end[] = {"Commit", "Rescan"};
-	GCallback fn[] = {G_CALLBACK(submit), G_CALLBACK(reload)};
+	static const char *end[] = {"Rescan", "Commit"}, *name[] = {"pick", "edit", "save", "cancel", "run", "all"};
+	static const GCallback does[] = {G_CALLBACK(pick), G_CALLBACK(edit), G_CALLBACK(save), G_CALLBACK(cancel), G_CALLBACK(run), G_CALLBACK(all)};
+	GCallback fn[] = {G_CALLBACK(reload), G_CALLBACK(submit)};
 	GtkWidget *l, *r, *b, *m, *c;
+	GtkEventController *e;
 	GtkTreeSelection *s;
 	char *o;
 	int k;
@@ -526,8 +562,6 @@ GtkWidget *commit_view(GtkWidget **pane)
 		reload();
 		return pane[0];
 	}
-	pane[0] = split(GTK_ORIENTATION_HORIZONTAL);
-	pane[1] = split(GTK_ORIENTATION_VERTICAL);
 	l = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	list = tree(GTK_TREE_MODEL(store = gtk_tree_store_new(5, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING)));
 	shut = g_strdup("");
@@ -538,32 +572,35 @@ GtkWidget *commit_view(GtkWidget **pane)
 	g_signal_connect(list, "row-activated", G_CALLBACK(act), 0);
 	g_signal_connect(list, "row-collapsed", G_CALLBACK(fold), GINT_TO_POINTER(1));
 	g_signal_connect(list, "row-expanded", G_CALLBACK(fold), 0);
-	g_signal_connect(list, "button-press-event", G_CALLBACK(press), 0);
-	gtk_box_pack_start(GTK_BOX(l), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
-	gtk_container_set_border_width(GTK_CONTAINER(b), 6);
+	events(list, G_CALLBACK(press), 0);
+	gtk_box_append(GTK_BOX(l), b = margin(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6)));
 	for (k = 0; k < 4; k++) {
-		gtk_box_pack_start(GTK_BOX(b), bar[k] = gtk_button_new_with_label(verb[k]), TRUE, TRUE, 0);
-		g_signal_connect(bar[k], "clicked", G_CALLBACK(run), GINT_TO_POINTER(k));
+		gtk_box_append(GTK_BOX(b), bar[k] = g_object_new(GTK_TYPE_BUTTON, "label", verb[k], "hexpand", TRUE, NULL));
+		g_signal_connect_swapped(bar[k], "clicked", G_CALLBACK(run), GINT_TO_POINTER(k));
 	}
-	gtk_box_pack_start(GTK_BOX(l), scroll(list), TRUE, TRUE, 0);
-	gtk_paned_pack1(GTK_PANED(pane[1]), gtk_widget_get_parent(dv = diff_view(lines, menu, top)), TRUE, FALSE);
-	gtk_paned_pack2(GTK_PANED(pane[1]), r = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6), FALSE, FALSE);
-	gtk_box_pack_start(GTK_BOX(r), b = scroll(m = g_object_new(GTK_TYPE_TEXT_VIEW, "name", "plain", "monospace", TRUE, NULL)), TRUE, TRUE, 0);
+	gtk_box_append(GTK_BOX(l), scroll(list));
+	g_object_set(pop = gtk_popover_menu_new_from_model(G_MENU_MODEL(pops = g_menu_new())), "has-arrow", FALSE, "halign", GTK_ALIGN_START, NULL);
+	gtk_widget_set_parent(pop, l);
+	r = margin(gtk_box_new(GTK_ORIENTATION_VERTICAL, 6));
+	gtk_box_append(GTK_BOX(r), b = scroll(m = g_object_new(GTK_TYPE_TEXT_VIEW, "name", "plain", "monospace", TRUE, NULL)));
 	gtk_widget_set_size_request(b, -1, 120);
 	msg = gtk_text_view_get_buffer(GTK_TEXT_VIEW(m));
 	if ((o = draft())) gtk_text_buffer_set_text(msg, o, -1), free(o);
-	gtk_box_pack_start(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(b), amend = gtk_check_button_new_with_label("Amend"), FALSE, FALSE, 0);
+	gtk_box_append(GTK_BOX(r), b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6));
+	gtk_box_append(GTK_BOX(b), amend = gtk_check_button_new_with_label("Amend"));
 	for (k = 0; k < 2; k++) {
-		gtk_box_pack_end(GTK_BOX(b), c = gtk_button_new_with_label(end[k]), FALSE, FALSE, 0);
+		gtk_box_append(GTK_BOX(b), c = g_object_new(GTK_TYPE_BUTTON, "label", end[k], "hexpand", !k, "halign", k ? GTK_ALIGN_FILL : GTK_ALIGN_END, NULL));
 		g_signal_connect_swapped(c, "clicked", fn[k], win);
 	}
-	gtk_container_set_border_width(GTK_CONTAINER(r), 6);
-	gtk_paned_pack1(GTK_PANED(pane[0]), l, FALSE, FALSE);
-	gtk_paned_pack2(GTK_PANED(pane[0]), tabs(pane[1], diff_tools(dv)), TRUE, TRUE);
+	pane[1] = split(GTK_ORIENTATION_VERTICAL, gtk_widget_get_parent(dv = diff_view(lines, menu, top)), r, 1);
+	pane[0] = split(GTK_ORIENTATION_HORIZONTAL, l, tabs(pane[1], diff_tools(dv)), 0);
+	actions(pane[0], name, does, G_N_ELEMENTS(name));
 	g_signal_connect(amend, "toggled", G_CALLBACK(last), 0);
-	g_signal_connect(win, "delete-event", G_CALLBACK(closing), 0);
-	g_signal_connect(win, "key-press-event", G_CALLBACK(key), 0);
+	g_signal_connect(win, "close-request", G_CALLBACK(closing), 0);
+	e = gtk_event_controller_key_new();
+	gtk_event_controller_set_propagation_phase(e, GTK_PHASE_CAPTURE);
+	g_signal_connect(e, "key-pressed", G_CALLBACK(key), 0);
+	gtk_widget_add_controller(win, e);
 	if (!nent) status();
 	fill();
 	return pane[0];

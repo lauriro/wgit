@@ -16,7 +16,7 @@ static GtkTextBuffer *info;
 static Row *row;
 static char *query, *seen;
 static GtkTreeModel *filter;
-static int nrow, cells, ncom, limit, pending, tagged, wip, again;
+static int nrow, cells, ncom, limit, pending, tagged, wip, again, busy;
 static const char title[] = "Uncommitted changes";
 static double x0;
 static const char sigs[] = "GUXYRBEN", *said[][2] = {
@@ -222,6 +222,28 @@ static gboolean paint(GtkTreeView *v, cairo_t *cr)
 	return FALSE;
 }
 
+/* The graph is drawn over the rows, as the GTK 3 draw signal did after the view */
+typedef GtkTreeView Rows;
+typedef GtkTreeViewClass RowsClass;
+G_DEFINE_TYPE(Rows, rows, GTK_TYPE_TREE_VIEW)
+
+static void rows_snapshot(GtkWidget *w, GtkSnapshot *s)
+{
+	cairo_t *cr;
+	GTK_WIDGET_CLASS(rows_parent_class)->snapshot(w, s);
+	paint(GTK_TREE_VIEW(w), cr = gtk_snapshot_append_cairo(s, &GRAPHENE_RECT_INIT(0, 0, gtk_widget_get_width(w), gtk_widget_get_height(w))));
+	cairo_destroy(cr);
+}
+
+static void rows_class_init(RowsClass *c)
+{
+	GTK_WIDGET_CLASS(c)->snapshot = rows_snapshot;
+}
+
+static void rows_init(Rows *r)
+{
+}
+
 static void put(const char *s, int len, const char *tag)
 {
 	GtkTextIter it;
@@ -255,6 +277,48 @@ static void details(int t, char **f, int sig)
 	put(f[6] + l, -1, 0);
 }
 
+static void pick(GtkTreeSelection *s);
+
+static gboolean fetched(char *o)
+{
+	busy = 0;
+	if (o) {
+		alert(o);
+		free(o);
+		pick(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
+	} else stale(), load();
+	return FALSE;
+}
+
+/* A fetch takes long: it runs beside the window, and the log reloads when it ends */
+static gpointer fetch(gpointer n)
+{
+	char *o;
+	if (!deepen(&o, GPOINTER_TO_INT(n))) free(o), o = 0;
+	g_idle_add((GSourceFunc)fetched, o);
+	return 0;
+}
+
+static void go(GtkWidget *b, GtkSpinButton *n)
+{
+	busy = 1;
+	g_object_set(b, "label", "Fetching…", "sensitive", FALSE, NULL);
+	g_thread_unref(g_thread_new(0, fetch, GINT_TO_POINTER(gtk_spin_button_get_value_as_int(n))));
+}
+
+static void deep(void)
+{
+	GtkTextBuffer *t = gtk_text_view_get_buffer(GTK_TEXT_VIEW(dv));
+	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), *n = gtk_spin_button_new_with_range(1, 1 << 30, 100), *f;
+	GtkTextIter it;
+	g_object_set(n, "value", 1000., NULL);
+	gtk_box_append(GTK_BOX(b), n);
+	gtk_box_append(GTK_BOX(b), f = g_object_new(GTK_TYPE_BUTTON, "label", busy ? "Fetching…" : "Deepen", "sensitive", !busy, NULL));
+	g_signal_connect(f, "clicked", G_CALLBACK(go), n);
+	gtk_text_buffer_get_end_iter(t, &it);
+	gtk_text_view_add_child_at_anchor(GTK_TEXT_VIEW(dv), b, gtk_text_buffer_create_child_anchor(t, &it));
+}
+
 static void pick(GtkTreeSelection *s)
 {
 	GtkTreeModel *m;
@@ -281,29 +345,27 @@ static void pick(GtkTreeSelection *s)
 		while (*f[8] == '\n') f[8]++;
 		/* An edge commit has no diff: the diff view says why */
 		diff_files(dv, row[i].edge ? "The edge of a shallow clone: its parent is not here, so what it changed is not known.\n"
-			"git fetch --deepen=<commits> brings older history.\n" : f[8]);
+			"Fetch older commits: " : f[8]);
+		if (row[i].edge) deep();
 	}
 	free(o);
 }
 
 /* More or less context around the changes, as in the commit view: one setting for both */
-static void wider(GtkWidget *w, gpointer more)
+static void wider(gpointer more)
 {
 	context = more ? 2 * context : MAX(1, context / 2);
 	pick(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
 }
 
-static void menu(GtkMenu *m, int hunk)
+/* A section, so a line parts it from GTK's items */
+static void menu(GMenu *m, int hunk)
 {
-	static const char *name[] = {"Less context", "More context"};
-	GtkWidget *i;
-	gtk_menu_shell_prepend(GTK_MENU_SHELL(m), gtk_separator_menu_item_new());
-	for (int k = 0; k < 2; k++) {
-		gtk_menu_shell_prepend(GTK_MENU_SHELL(m), i = gtk_menu_item_new_with_label(name[k]));
-		gtk_widget_set_sensitive(i, k || context > 1);
-		g_signal_connect(i, "activate", G_CALLBACK(wider), GINT_TO_POINTER(k));
-	}
-	gtk_widget_show_all(GTK_WIDGET(m));
+	GMenu *s = g_menu_new();
+	g_menu_append(s, "More context", "v.wider(1)");
+	g_menu_append(s, "Less context", context > 1 ? "v.wider(0)" : "v.no(0)");
+	g_menu_append_section(m, 0, G_MENU_MODEL(s));
+	g_object_unref(s);
 }
 
 static void tag(char *name)
@@ -333,16 +395,22 @@ static gboolean down(GtkTreeView *v)
 	return FALSE;
 }
 
-static gboolean chip(GtkTreeView *v, GdkEventButton *ev)
+static gboolean chip(GtkEventController *ec, GdkEvent *ev)
 {
+	GtkTreeView *v = GTK_TREE_VIEW(list);
 	GtkTreePath *p;
 	GtkTreeViewColumn *c;
 	GtkTreeIter it;
 	PangoLayout *l;
 	PangoAttrIterator *a;
 	char *m, *t;
-	int x, i, j, s, e, was = tagged;
-	if (ev->button != 1 || !gtk_tree_view_get_path_at_pos(v, ev->x, ev->y, &p, &c, &x, 0)) return FALSE;
+	double ex, ey;
+	int x, y, i, j, s, e, was = tagged;
+	if (gdk_event_get_event_type(ev) == GDK_BUTTON_PRESS) return down(v);
+	if (gdk_event_get_event_type(ev) != GDK_BUTTON_RELEASE || gdk_button_event_get_button(ev) != 1) return FALSE;
+	local(list, ev, &ex, &ey);
+	gtk_tree_view_convert_widget_to_bin_window_coords(v, ex, ey, &x, &y);
+	if (!gtk_tree_view_get_path_at_pos(v, x, y, &p, &c, &x, 0)) return FALSE;
 	tagged = 0;
 	gtk_tree_model_get_iter(filter, &it, p);
 	gtk_tree_path_free(p);
@@ -382,7 +450,7 @@ static gboolean shown(GtkTreeModel *m, GtkTreeIter *it)
 static void find(GtkEntry *e)
 {
 	g_free(query);
-	query = g_utf8_casefold(gtk_entry_get_text(e), -1);
+	query = g_utf8_casefold(gtk_editable_get_text(GTK_EDITABLE(e)), -1);
 	if (*query && ncom >= limit) more(GINT_TO_POINTER(1));
 	gtk_tree_model_filter_refilter(GTK_TREE_MODEL_FILTER(filter));
 	g_object_set(graph, "visible", !*query, NULL);
@@ -390,6 +458,8 @@ static void find(GtkEntry *e)
 
 GtkWidget *log_view(GtkWidget **pane)
 {
+	static const char *name[] = {"wider"};
+	static const GCallback does[] = {G_CALLBACK(wider)};
 	GtkWidget *v, *b, *c;
 	GtkTreeViewColumn *col;
 	GtkCellRenderer *t;
@@ -401,36 +471,30 @@ GtkWidget *log_view(GtkWidget **pane)
 	}
 	filter = gtk_tree_model_filter_new(GTK_TREE_MODEL(store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_INT)), 0);
 	gtk_tree_model_filter_set_visible_func(GTK_TREE_MODEL_FILTER(filter), (GtkTreeModelFilterVisibleFunc)shown, 0, 0);
-	list = gtk_tree_view_new_with_model(filter);
+	list = g_object_new(rows_get_type(), "model", filter, NULL);
 	graph = gtk_tree_view_column_new_with_attributes(0, gtk_cell_renderer_text_new(), NULL);
 	g_object_set(graph, "sizing", GTK_TREE_VIEW_COLUMN_FIXED, NULL);
 	gtk_tree_view_append_column(GTK_TREE_VIEW(list), graph);
-	g_signal_connect_after(list, "draw", G_CALLBACK(paint), 0);
 	g_object_set(t = gtk_cell_renderer_text_new(), "ellipsize", PANGO_ELLIPSIZE_END, NULL);
 	col = gtk_tree_view_column_new_with_attributes(0, t, "markup", 0, NULL);
 	g_object_set(col, "sizing", GTK_TREE_VIEW_COLUMN_FIXED, "expand", TRUE, NULL);
 	gtk_tree_view_append_column(GTK_TREE_VIEW(list), col);
 	g_object_set(list, "headers-visible", FALSE, "fixed-height-mode", TRUE, NULL);
 	g_signal_connect(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), "changed", G_CALLBACK(pick), 0);
-	g_signal_connect(list, "button-press-event", G_CALLBACK(down), 0);
-	g_signal_connect(list, "button-release-event", G_CALLBACK(chip), 0);
+	events(list, G_CALLBACK(chip), 0);
 	v = g_object_new(GTK_TYPE_TEXT_VIEW, "name", "plain", "editable", FALSE, "monospace", TRUE, "wrap-mode", GTK_WRAP_WORD_CHAR, NULL);
 	info = gtk_text_view_get_buffer(GTK_TEXT_VIEW(v));
 	for (k = 0; k < 5; k++) gtk_text_buffer_create_tag(info, ink[k][0], "foreground", ink[k][1], NULL);
 	gtk_text_buffer_create_tag(info, "bold", "weight", PANGO_WEIGHT_BOLD, NULL);
 	gtk_text_buffer_create_tag(info, "note", "paragraph-background", "rgba(128,128,128,0.2)", NULL);
-	pane[0] = split(GTK_ORIENTATION_HORIZONTAL);
-	pane[1] = split(GTK_ORIENTATION_VERTICAL);
-	gtk_paned_pack1(GTK_PANED(pane[1]), gtk_widget_get_parent(dv = diff_view(0, menu, 0)), TRUE, FALSE);
-	gtk_paned_pack2(GTK_PANED(pane[1]), v = scroll(v), FALSE, FALSE);
-	gtk_container_set_border_width(GTK_CONTAINER(v), 6);
+	pane[1] = split(GTK_ORIENTATION_VERTICAL, gtk_widget_get_parent(dv = diff_view(0, menu, 0)), v = margin(scroll(v)), 1);
 	gtk_widget_set_size_request(v, -1, 150);
 	b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-	gtk_box_pack_start(GTK_BOX(b), c = g_object_new(GTK_TYPE_SEARCH_ENTRY, "placeholder-text", "Filter: hash, ref, subject, author", "margin", 6, NULL), FALSE, FALSE, 0);
+	gtk_box_append(GTK_BOX(b), c = margin(g_object_new(GTK_TYPE_SEARCH_ENTRY, "placeholder-text", "Filter: hash, ref, subject, author", NULL)));
 	g_signal_connect(c, "search-changed", G_CALLBACK(find), 0);
-	gtk_box_pack_start(GTK_BOX(b), scroll(list), TRUE, TRUE, 0);
-	gtk_paned_pack1(GTK_PANED(pane[0]), b, FALSE, FALSE);
-	gtk_paned_pack2(GTK_PANED(pane[0]), tabs(pane[1], diff_tools(dv)), TRUE, TRUE);
+	gtk_box_append(GTK_BOX(b), scroll(list));
+	pane[0] = split(GTK_ORIENTATION_HORIZONTAL, b, tabs(pane[1], diff_tools(dv)), 0);
+	actions(pane[0], name, does, 1);
 	stale();
 	load();
 	return pane[0];

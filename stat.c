@@ -59,11 +59,16 @@ static void act(GtkTreeView *v, GtkTreePath *p)
 }
 
 /* A click on the arrow of a folder closes or opens it; a click on its name selects it */
-static gboolean press(GtkTreeView *v, GdkEventButton *ev)
+static gboolean press(GtkEventController *c, GdkEvent *ev)
 {
+	GtkTreeView *v = GTK_TREE_VIEW(list);
 	GtkTreePath *p;
-	int x, r = 0;
-	if (ev->type == GDK_BUTTON_PRESS && gtk_tree_view_get_path_at_pos(v, ev->x, ev->y, &p, 0, &x, 0)) {
+	double ex, ey;
+	int x, y, r = 0;
+	if (gdk_event_get_event_type(ev) != GDK_BUTTON_PRESS) return FALSE;
+	local(list, ev, &ex, &ey);
+	gtk_tree_view_convert_widget_to_bin_window_coords(v, ex, ey, &x, &y);
+	if (gtk_tree_view_get_path_at_pos(v, x, y, &p, 0, &x, 0)) {
 		r = x < 16 * gtk_tree_path_get_depth(p) + 4 && (gtk_tree_view_collapse_row(v, p) || gtk_tree_view_expand_row(v, p, FALSE));
 		gtk_tree_path_free(p);
 	}
@@ -115,15 +120,13 @@ GtkWidget *stat_view(GtkWidget **pane)
 		gtk_tree_view_expand_row(GTK_TREE_VIEW(list), tp, FALSE);
 		gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), tp, 0, FALSE);
 		gtk_tree_path_free(tp);
-		g_signal_connect(list, "button-press-event", G_CALLBACK(press), 0);
+		events(list, G_CALLBACK(press), 0);
 		g_signal_connect(list, "row-activated", G_CALLBACK(act), 0);
 		g_signal_connect(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)), "changed", G_CALLBACK(load), 0);
 		g_signal_connect(stack, "notify::visible-child", G_CALLBACK(load), 0);
-		pane[0] = split(GTK_ORIENTATION_HORIZONTAL);
-		gtk_box_pack_start(GTK_BOX(l = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0)), g_object_new(GTK_TYPE_STACK_SWITCHER, "stack", stack, "margin", 6, NULL), FALSE, FALSE, 0);
-		gtk_box_pack_start(GTK_BOX(l), scroll(list), TRUE, TRUE, 0);
-		gtk_paned_pack1(GTK_PANED(pane[0]), l, FALSE, FALSE);
-		gtk_paned_pack2(GTK_PANED(pane[0]), tabs(stack, where = g_object_new(GTK_TYPE_LABEL, "ellipsize", PANGO_ELLIPSIZE_START, NULL)), TRUE, TRUE);
+		gtk_box_append(GTK_BOX(l = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0)), margin(g_object_new(GTK_TYPE_STACK_SWITCHER, "stack", stack, NULL)));
+		gtk_box_append(GTK_BOX(l), scroll(list));
+		pane[0] = split(GTK_ORIENTATION_HORIZONTAL, l, tabs(stack, where = g_object_new(GTK_TYPE_LABEL, "ellipsize", PANGO_ELLIPSIZE_START, NULL)), 0);
 	}
 	load();
 	return pane[0];

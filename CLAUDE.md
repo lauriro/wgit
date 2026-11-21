@@ -8,8 +8,8 @@ It holds what the code and the git history do not say; read the source for the r
 
 gk is a Wayland-native git UI for the user's TarkOS laptop:
 a Debian testing (glibc) desktop with the dwl compositor.
-GTK 3.24 is already in the desktop's stack image, so gk uses GTK 3 only:
-no GTK 4, no libadwaita, no other libraries.
+GTK 4 is in the desktop's stack image, for the desktop's own windows, so gk uses GTK 4 only, on GTK's own theme:
+no GTK 3, no libadwaita, no other libraries.
 
 - One window with three views; a `[ Commit | Log | Stat ]` switcher at the top right switches them.
   `gk` alone opens the commit view if `git status` lists anything, else the log view.
@@ -63,6 +63,11 @@ Why some things are as they are:
   and the window waits for it.
 - The diff view replaces the header lines of each file with a title line,
   so a map from view lines to diff lines keeps clicks and selections on diff lines.
+- On an edge row of a shallow clone the diff view shows a number and a Deepen button, at the end of its buffer.
+  `git fetch --deepen` runs in a thread so the window does not wait, and the log reloads by force:
+  the refs do not change, so `stale()` does not see it.
+  Every git run gets `GIT_TERMINAL_PROMPT=0`: the window has no terminal, so a fetch that wants a password fails.
+  When a deepen reaches the root, git still lists the root in `shallow`; one more deepen clears it.
 - The log checks the signature of the selected commit only, as `%G?` for all rows is slow.
   One `git show` gives the details and the diff: the format ends with a NUL and the diff comes after it.
 - The log loads 10,000 commits at a time and adds only the new rows, so selection and scroll stay.
@@ -95,7 +100,7 @@ On this host `git` in the shell is a function that may fail; use `command git`.
 Plain image, slow, the command to give the user:
 
 ```sh
-cd /home/lauri/code/litejs/gk && podman run --rm -v "$PWD:$PWD" -w "$PWD" docker.io/library/debian:testing-slim sh -c 'apt-get update -qq && apt-get install -y -qq gcc make pkg-config libgtk-3-dev git >/dev/null && make && make test'
+cd /home/lauri/code/litejs/gk && podman run --rm -v "$PWD:$PWD" -w "$PWD" docker.io/library/debian:testing-slim sh -c 'apt-get update -qq && apt-get install -y -qq gcc make pkg-config libgtk-4-dev git >/dev/null && make && make test'
 ```
 
 Local image, fast:
@@ -105,7 +110,7 @@ podman build -t gk-build .
 podman run --rm -v "$PWD:$PWD" -w "$PWD" gk-build make gk test
 ```
 
-`make test` builds `gk-test` and runs `test.sh`; the last line is `62 passed, 0 failed`.
+`make test` builds `gk-test` and runs `test.sh`; the last line is `106 passed, 0 failed`.
 The test names are in `test.sh`, the commands of `gk-test` in `test.c`.
 
 Size:
@@ -158,8 +163,6 @@ and start a small GDBus mock that owns `org.freedesktop.portal.Desktop` like tar
 
 ## Known limits
 
-- GTK 3 drops the dark variant when `gtk-theme-name` names a theme that is not installed:
-  it falls back to plain Adwaita, light, whatever the colour scheme says.
 - A lone `\r` or a U+2029 in a diff line splits it into two buffer lines,
   so the line selection after it points at the wrong diff lines.
 - Unstaging part of a newly added file fails: git will not remove only part of a new file.
@@ -176,7 +179,7 @@ and start a small GDBus mock that owns `org.freedesktop.portal.Desktop` like tar
 The global rules for style, commits and language apply. For this repo:
 
 - The shortest general code that does the job, no frameworks.
-  Measure the stripped binary (`ls -l gk` after `make`) and report its size; it was 64,168 bytes.
+  Measure the stripped binary (`ls -l gk` after `make`) and report its size; it was 84,968 bytes.
   The size changes in steps of 4096 bytes, so count the imports of a change.
 - Commit scopes are the areas: `git:`, `diff:`, `log:`, `build:`, `docs:`.
   End the message with the `Co-Authored-By` line of the model that did the work.

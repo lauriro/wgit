@@ -18,11 +18,9 @@ int main(int argc, char **argv)
 	GtkTextIter a, b;
 	GtkTextTag *t;
 	char *text, *face, *actual;
-	gtk_init(&argc, &argv);
+	gtk_init();
 	stack = gtk_stack_new();
-	page[0] = gtk_label_new("page");
-	gtk_container_add(GTK_CONTAINER(stack), page[0]);
-	gtk_widget_show_all(stack);
+	gtk_stack_add_child(GTK_STACK(stack), page[0] = gtk_label_new("page"));
 	list = gtk_tree_view_new();
 	where = gtk_label_new("");
 	buf = gtk_text_buffer_new(0);

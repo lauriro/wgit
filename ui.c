@@ -13,15 +13,73 @@ static char *conf;
 
 GtkWidget *scroll(GtkWidget *w)
 {
-	GtkWidget *s = gtk_scrolled_window_new(0, 0);
-	gtk_container_add(GTK_CONTAINER(s), w);
-	return s;
+	return g_object_new(GTK_TYPE_SCROLLED_WINDOW, "child", w, "vexpand", TRUE, NULL);
 }
 
-/* A wide handle: the usual line of 1 px is hard to grab */
-GtkWidget *split(int orientation)
+/* A wide handle: the usual line of 1 px is hard to grab. With first, the first child takes the change of size,
+ * else the second does and may shrink */
+GtkWidget *split(int orientation, GtkWidget *a, GtkWidget *b, int first)
 {
-	return g_object_new(GTK_TYPE_PANED, "orientation", orientation, "wide-handle", TRUE, NULL);
+	return g_object_new(GTK_TYPE_PANED, "orientation", orientation, "wide-handle", TRUE, "start-child", a, "end-child", b,
+		"resize-start-child", first, "shrink-start-child", FALSE, "resize-end-child", !first, "shrink-end-child", !first, NULL);
+}
+
+/* GTK 4 has no border width: a margin all round does its work */
+GtkWidget *margin(GtkWidget *w)
+{
+	g_object_set(w, "margin-start", 6, "margin-end", 6, "margin-top", 6, "margin-bottom", 6, NULL);
+	return w;
+}
+
+/* The raw events before the widget's own handling, as the GTK 3 event signals had them: a gesture of the widget
+ * that claims a press would take the release from a gesture of ours */
+void events(GtkWidget *w, GCallback fn, gpointer data)
+{
+	GtkEventController *c = gtk_event_controller_legacy_new();
+	gtk_event_controller_set_propagation_phase(c, GTK_PHASE_CAPTURE);
+	g_signal_connect(c, "event", fn, data);
+	gtk_widget_add_controller(w, c);
+}
+
+/* A raw event has its place on the surface */
+void local(GtkWidget *w, GdkEvent *e, double *x, double *y)
+{
+	GtkNative *n = gtk_widget_get_native(w);
+	graphene_point_t p;
+	double nx, ny;
+	gdk_event_get_position(e, x, y);
+	gtk_native_get_surface_transform(n, &nx, &ny);
+	if (gtk_widget_compute_point(GTK_WIDGET(n), w, &GRAPHENE_POINT_INIT(*x - nx, *y - ny), &p)) *x = p.x, *y = p.y;
+}
+
+static void fire(gpointer fn, GVariant *v)
+{
+	((void (*)(gpointer))fn)(GINT_TO_POINTER(g_variant_get_int32(v)));
+}
+
+/* A menu item names its action and an int for it, "v.name(1)". "v.no(0)" is an item that cannot be used:
+ * a menu model has no sensitivity of its own */
+void actions(GtkWidget *w, const char *const *names, const GCallback *fns, int n)
+{
+	GSimpleActionGroup *g = g_simple_action_group_new();
+	GSimpleAction *a;
+	int k;
+	for (k = 0; k <= n; k++) {
+		a = g_simple_action_new(k < n ? names[k] : "no", G_VARIANT_TYPE_INT32);
+		if (k < n) g_signal_connect_swapped(a, "activate", G_CALLBACK(fire), fns[k]);
+		else g_simple_action_set_enabled(a, FALSE);
+		g_action_map_add_action(G_ACTION_MAP(g), G_ACTION(a));
+		g_object_unref(a);
+	}
+	gtk_widget_insert_action_group(w, "v", G_ACTION_GROUP(g));
+	g_object_unref(g);
+}
+
+void alert(const char *s)
+{
+	GtkAlertDialog *d = gtk_alert_dialog_new("%s", s);
+	gtk_alert_dialog_show(d, GTK_WINDOW(win));
+	g_object_unref(d);
 }
 
 static void arrow(GtkTreeView *v, GtkTreeIter *it, GtkTreePath *p, gpointer shut)
@@ -46,12 +104,13 @@ GtkWidget *tree(GtkTreeModel *m)
 	return v;
 }
 
-static gboolean quit(GtkWidget *w)
+/* GTK 4 keeps the default size of a tiled window as it was, so the size is the window's own */
+static gboolean quit(GtkWindow *w)
 {
 	FILE *f;
 	int k;
-	if (!(gdk_window_get_state(gtk_widget_get_window(w)) & (GDK_WINDOW_STATE_MAXIMIZED | GDK_WINDOW_STATE_FULLSCREEN)))
-		gtk_window_get_size(GTK_WINDOW(w), geo, geo + 1);
+	if (!gtk_window_is_maximized(w) && !gtk_window_is_fullscreen(w))
+		geo[0] = gtk_widget_get_width(GTK_WIDGET(w)), geo[1] = gtk_widget_get_height(GTK_WIDGET(w));
 	for (k = 0; k < 5; k++) if (pane[k & 6]) g_object_get(pane[k], "position", geo + k + 2, NULL);
 	g_mkdir_with_parents(g_get_user_state_dir(), 0700);
 	if ((f = fopen(conf, "w"))) {
@@ -70,7 +129,7 @@ static void dark(GVariant *v)
 		v = u;
 	}
 	if (g_variant_is_of_type(v, G_VARIANT_TYPE_UINT32))
-		g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", g_variant_get_uint32(v) == 1, NULL);
+		g_object_set(gtk_settings_get_default(), "gtk-interface-color-scheme", g_variant_get_uint32(v) == 1 ? GTK_INTERFACE_COLOR_SCHEME_DARK : GTK_INTERFACE_COLOR_SCHEME_LIGHT, NULL);
 	g_variant_unref(v);
 }
 
@@ -81,6 +140,7 @@ static void changed(GDBusConnection *c, const char *from, const char *path, cons
 	if (!strcmp(k, "color-scheme")) dark(g_variant_get_child_value(p, 2));
 }
 
+/* GTK reads the portal with ReadAll, which tark-shell does not have */
 static void theme(void)
 {
 	static const char *how[] = {"ReadOne", "Read"};
@@ -105,8 +165,8 @@ static void show(int v)
 	GtkWidget *w = view[v](pane + i);
 	if (built) return;
 	for (k = i; k < i + 2; k++) if (geo[k + 2]) g_object_set(pane[k], "position", geo[k + 2], NULL);
-	gtk_box_pack_start(GTK_BOX(page[v]), w, TRUE, TRUE, 0);
-	gtk_widget_show_all(w);
+	gtk_widget_set_vexpand(w, TRUE);
+	gtk_box_append(GTK_BOX(page[v]), w);
 }
 
 static void switched(GtkStack *s)
@@ -117,23 +177,19 @@ static void switched(GtkStack *s)
 }
 
 /* The view's tools on the left, the views and a × on the right.
- * The window has no title bar under dwl: the × is its close, through delete-event, so the sizes are saved.
- * Its look is the desktop theme's .close, a plain flat button elsewhere; a click leaves the focus where it was,
- * so no focus ring is left around it */
+ * The window has no title bar under dwl: the × is its close, through close-request, so the sizes are saved.
+ * A click leaves the focus where it was, so no focus ring is left around it */
 GtkWidget *tabs(GtkWidget *w, GtkWidget *tools)
 {
-	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0), *h = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), *s = g_object_new(GTK_TYPE_STACK_SWITCHER, "stack", stack, NULL),
-		*x = g_object_new(GTK_TYPE_BUTTON, "image", gtk_image_new_from_icon_name("window-close-symbolic", GTK_ICON_SIZE_MENU), "valign", GTK_ALIGN_CENTER, "focus-on-click", FALSE, NULL);
-	GtkStyleContext *c = gtk_widget_get_style_context(x);
-	gtk_style_context_add_class(c, "close");
-	gtk_style_context_add_class(c, "flat");
+	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0), *h = margin(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6)),
+		*x = g_object_new(GTK_TYPE_BUTTON, "icon-name", "window-close-symbolic", "has-frame", FALSE, "valign", GTK_ALIGN_CENTER, "focus-on-click", FALSE, NULL);
 	g_signal_connect_swapped(x, "clicked", G_CALLBACK(gtk_window_close), win);
-	gtk_container_set_border_width(GTK_CONTAINER(h), 6);
-	gtk_box_pack_start(GTK_BOX(h), tools, FALSE, FALSE, 0);
-	gtk_box_pack_end(GTK_BOX(h), x, FALSE, FALSE, 0);
-	gtk_box_pack_end(GTK_BOX(h), s, FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(b), h, FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(b), w, TRUE, TRUE, 0);
+	gtk_box_append(GTK_BOX(h), tools);
+	gtk_box_append(GTK_BOX(h), g_object_new(GTK_TYPE_STACK_SWITCHER, "stack", stack, "hexpand", TRUE, "halign", GTK_ALIGN_END, NULL));
+	gtk_box_append(GTK_BOX(h), x);
+	gtk_box_append(GTK_BOX(b), h);
+	gtk_widget_set_vexpand(w, TRUE);
+	gtk_box_append(GTK_BOX(b), w);
 	return b;
 }
 
@@ -141,33 +197,30 @@ int app(const char *path, int v)
 {
 	FILE *f;
 	GtkCssProvider *css;
+	GMainLoop *loop;
 	char *top = repo(path);
 	int i;
 	if (!top) return fputs("gk: not a git repository\n", stderr), 1;
 	if (v < 0) status(), v = !nent;
-	setenv("NO_AT_BRIDGE", "1", 0);
+	setenv("GTK_A11Y", "none", 0);
 	g_set_prgname("gk");
-	gtk_init(0, 0);
+	gtk_init();
 	theme();
-	gtk_css_provider_load_from_data(css = gtk_css_provider_new(), "stackswitcher button { min-width: 0 } #plain, #plain text { background: none }", -1, 0);
-	gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), (GtkStyleProvider *)css, GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+	gtk_css_provider_load_from_string(css = gtk_css_provider_new(), "stackswitcher button { min-width: 0; } #plain, #plain text { background: none; }");
+	gtk_style_context_add_provider_for_display(gdk_display_get_default(), GTK_STYLE_PROVIDER(css), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 	if ((f = fopen(conf = g_strdup_printf("%s/gk", g_get_user_state_dir()), "r"))) {
 		fscanf(f, "%d %d %d %d %d %d %d", geo, geo + 1, geo + 2, geo + 3, geo + 4, geo + 5, geo + 6);
 		fclose(f);
 	}
-	win = g_object_new(GTK_TYPE_WINDOW, "title", top, "default-width", geo[0], "default-height", geo[1], NULL);
-	gtk_container_add(GTK_CONTAINER(win), stack = gtk_stack_new());
-	for (i = 0; i < 3; i++) {
-		gtk_widget_show_all(page[i] = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
-		gtk_stack_add_titled(GTK_STACK(stack), page[i], title[i], title[i]);
-	}
+	win = g_object_new(GTK_TYPE_WINDOW, "title", top, "default-width", geo[0], "default-height", geo[1], "child", stack = gtk_stack_new(), NULL);
+	for (i = 0; i < 3; i++) gtk_stack_add_titled(GTK_STACK(stack), page[i] = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0), title[i], title[i]);
 	g_object_set(stack, "visible-child", page[v], NULL);
 	show(v);
 	g_signal_connect(stack, "notify::visible-child", G_CALLBACK(switched), 0);
-	g_signal_connect(win, "delete-event", G_CALLBACK(quit), 0);
-	g_signal_connect(win, "destroy", G_CALLBACK(gtk_main_quit), 0);
-	gtk_widget_show_all(win);
-	gtk_main();
+	g_signal_connect(win, "close-request", G_CALLBACK(quit), 0);
+	g_signal_connect_swapped(win, "destroy", G_CALLBACK(g_main_loop_quit), loop = g_main_loop_new(0, 0));
+	gtk_window_present(GTK_WINDOW(win));
+	g_main_loop_run(loop);
 	return 0;
 }
 

@@ -6,9 +6,9 @@
 LiteJS gk &ndash; [![Buy Me A Tea][1]][2]
 ==========
 
-A small git UI for Wayland, written in C with GTK 3 only.
+A small git UI for Wayland, written in C with GTK 4 only.
 
- - No dependencies besides GTK 3 and git
+ - No dependencies besides GTK 4 and git
 
 ```sh
 $ make
@@ -127,7 +127,7 @@ the graph of all branches at the left, the diff of the selected commit at the ri
 The build machine needs no compiler, the build runs in Debian testing:
 
 ```sh
-podman run --rm -v "$PWD:$PWD" -w "$PWD" docker.io/library/debian:testing-slim sh -c 'apt-get update -qq && apt-get install -y -qq gcc make pkg-config libgtk-3-dev git >/dev/null && make && make test'
+podman run --rm -v "$PWD:$PWD" -w "$PWD" docker.io/library/debian:testing-slim sh -c 'apt-get update -qq && apt-get install -y -qq gcc make pkg-config libgtk-4-dev git >/dev/null && make && make test'
 ```
 
 For faster builds, make the local image once from `Containerfile`:

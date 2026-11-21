@@ -6,7 +6,7 @@
 #include "ui.h"
 
 typedef void Hunk(int from, int to);
-typedef void Menu(GtkMenu *m, int hunk);
+typedef void Menu(GMenu *m, int hunk);
 typedef void Top(const char *path);
 
 /* A file list row has this much space above its arrow and text and below its text.
@@ -36,10 +36,10 @@ static int map(GtkWidget *w, int l)
 	return !m || l < 0 || l >= *m ? l : m[l + 1];
 }
 
-static int line(GtkTextView *w, GdkEventButton *ev, GtkTextIter *a)
+static int line(GtkTextView *w, double ex, double ey, GtkTextIter *a)
 {
 	int x, y;
-	gtk_text_view_window_to_buffer_coords(w, GTK_TEXT_WINDOW_TEXT, ev->x, ev->y, &x, &y);
+	gtk_text_view_window_to_buffer_coords(w, GTK_TEXT_WINDOW_WIDGET, ex, ey, &x, &y);
 	gtk_text_view_get_iter_at_location(w, a, x, y);
 	gtk_text_iter_set_line_offset(a, 0);
 	return gtk_text_iter_get_line(a);
@@ -50,21 +50,23 @@ static GtkTextTag *tag(GtkTextBuffer *b, const char *name)
 	return g_object_get_data(G_OBJECT(b), name);
 }
 
+/* The icon is drawn once in the text's colour, as GTK 3 loaded a symbolic icon for the style.
+ * GTK 4 has the pan icons built in, so there is always one */
 static void arrow(GtkTextView *v, GtkTextIter *it, int closed)
 {
-	GtkIconInfo *i = gtk_icon_theme_lookup_icon(gtk_icon_theme_get_default(), closed ? "pan-end-symbolic" : "pan-down-symbolic", 16, 0);
-	GdkPixbuf *p = i ? gtk_icon_info_load_symbolic_for_context(i, gtk_widget_get_style_context(GTK_WIDGET(v)), 0, 0) : 0, *q;
-	int m = MARGIN, a;
-	if (p) {
-		a = MAX(asc + 2 * PAD - gdk_pixbuf_get_height(p), 0);
-		q = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, m + gdk_pixbuf_get_width(p), asc + PAD);
-		gdk_pixbuf_fill(q, 0);
-		gdk_pixbuf_copy_area(p, 0, 0, gdk_pixbuf_get_width(p), asc + PAD - a, q, m, a);
-		gtk_text_buffer_insert_pixbuf(gtk_text_view_get_buffer(v), it, q);
-		g_object_unref(q);
-		g_object_unref(p);
-	} else gtk_text_buffer_insert(gtk_text_view_get_buffer(v), it, closed ? "▸" : "▾", -1);
-	if (i) g_object_unref(i);
+	GtkWidget *w = GTK_WIDGET(v);
+	GtkIconPaintable *i = gtk_icon_theme_lookup_icon(gtk_icon_theme_get_for_display(gtk_widget_get_display(w)), closed ? "pan-end-symbolic" : "pan-down-symbolic", 0, 16, 1, GTK_TEXT_DIR_NONE, 0);
+	GtkSnapshot *s = gtk_snapshot_new();
+	GdkPaintable *p;
+	GdkRGBA c;
+	gtk_widget_get_color(w, &c);
+	gtk_snapshot_push_clip(s, &GRAPHENE_RECT_INIT(0, 0, MARGIN + 16, asc + PAD));
+	gtk_snapshot_translate(s, &GRAPHENE_POINT_INIT(MARGIN, MAX(asc + 2 * PAD - 16, 0)));
+	gtk_symbolic_paintable_snapshot_symbolic(GTK_SYMBOLIC_PAINTABLE(i), s, 16, 16, &c, 1);
+	gtk_snapshot_pop(s);
+	gtk_text_buffer_insert_paintable(gtk_text_view_get_buffer(v), it, p = gtk_snapshot_free_to_paintable(s, &GRAPHENE_SIZE_INIT(MARGIN + 16, asc + PAD)));
+	g_object_unref(p);
+	g_object_unref(i);
 }
 
 static void fold(GtkTextView *v, int l, int hide)
@@ -151,87 +153,139 @@ static int stuck(GtkTextView *v, GtkTextIter *it, int *top, int *h)
 	return 1;
 }
 
-static int hit(GtkTextView *v, GdkEventButton *ev, GtkTextIter *it)
+static int hit(GtkTextView *v, double ex, double ey, GtkTextIter *it)
 {
 	int top, h, x, y;
-	gtk_text_view_window_to_buffer_coords(v, GTK_TEXT_WINDOW_TEXT, ev->x, ev->y, &x, &y);
+	gtk_text_view_window_to_buffer_coords(v, GTK_TEXT_WINDOW_WIDGET, ex, ey, &x, &y);
 	return stuck(v, it, &top, &h) && y < top + h;
 }
 
-static gboolean stick(GtkTextView *v, cairo_t *cr)
+/* The text view's own background under the title: GTK 4 gives a widget's colour but not its background */
+static void stick(GtkTextView *v, GtkSnapshot *sn)
 {
-	GtkStyleContext *c = gtk_widget_get_style_context(GTK_WIDGET(v));
+	GtkWidget *wv = GTK_WIDGET(v);
 	GtkTextIter it;
 	GdkRectangle r;
-	GdkPixbuf *pb;
+	GdkPaintable *pb;
 	PangoLayout *l;
+	GdkRGBA c;
 	char *s, *p, *q, *m;
-	int top, h, x, y, lh, w = 0;
-	if (!stuck(v, &it, &top, &h)) return FALSE;
+	int top, h, x, y, lh, d, w = 0;
+	if (!stuck(v, &it, &top, &h)) return;
 	gtk_text_view_get_visible_rect(v, &r);
 	gtk_text_view_buffer_to_window_coords(v, GTK_TEXT_WINDOW_WIDGET, r.x, top, &x, &y);
-	gtk_render_background(c, cr, x, y, r.width, h);
-	cairo_set_source_rgba(cr, .5, .5, .5, .2);
-	cairo_rectangle(cr, x, y, r.width, h);
-	cairo_fill(cr);
+	gtk_snapshot_render_background(sn, gtk_widget_get_style_context(wv), x, y, r.width, h);
+	gtk_snapshot_append_color(sn, &(GdkRGBA){.5, .5, .5, .2}, &GRAPHENE_RECT_INIT(x, y, r.width, h));
 	s = named(gtk_text_view_get_buffer(v), &it, &p);
 	if ((q = strchr(p, '-'))) *q++ = 0;
 	m = g_markup_printf_escaped("<span font=\"%s\"><b>%s</b>  <span foreground=\"#2a2\">%s</span><span foreground=\"#d33\">%s%s</span></span>", font, s, p, q ? "-" : "", q ? q : "");
-	pango_layout_set_markup(l = gtk_widget_create_pango_layout(GTK_WIDGET(v), 0), m, -1);
+	pango_layout_set_markup(l = gtk_widget_create_pango_layout(wv, 0), m, -1);
 	pango_layout_get_pixel_size(l, 0, &lh);
-	y += h - PAD - lh;
-	if ((pb = gtk_text_iter_get_pixbuf(&it))) {
-		gdk_cairo_set_source_pixbuf(cr, pb, x, y + pango_layout_get_baseline(l) / PANGO_SCALE - gdk_pixbuf_get_height(pb));
-		cairo_paint(cr);
-		w = gdk_pixbuf_get_width(pb);
+	gtk_snapshot_save(sn);
+	gtk_snapshot_translate(sn, &GRAPHENE_POINT_INIT(x, y + h - PAD - lh));
+	if ((pb = gtk_text_iter_get_paintable(&it))) {
+		w = gdk_paintable_get_intrinsic_width(pb);
+		d = pango_layout_get_baseline(l) / PANGO_SCALE - gdk_paintable_get_intrinsic_height(pb);
+		gtk_snapshot_translate(sn, &GRAPHENE_POINT_INIT(0, d));
+		gdk_paintable_snapshot(pb, sn, w, gdk_paintable_get_intrinsic_height(pb));
+		gtk_snapshot_translate(sn, &GRAPHENE_POINT_INIT(w, -d));
 	}
-	gtk_render_layout(c, cr, x + w, y, l);
+	gtk_widget_get_color(wv, &c);
+	gtk_snapshot_append_layout(sn, l, &c);
+	gtk_snapshot_restore(sn);
 	g_object_unref(l);
 	g_free(m);
 	g_free(s);
-	return FALSE;
 }
 
-static gboolean click(GtkTextView *w, GdkEventButton *ev, Hunk *hunk)
+/* The title of the file at the top is drawn over the text, as the GTK 3 draw signal did after the view */
+typedef GtkTextView Diff;
+typedef GtkTextViewClass DiffClass;
+G_DEFINE_TYPE(Diff, diff, GTK_TYPE_TEXT_VIEW)
+
+static void diff_snapshot(GtkWidget *w, GtkSnapshot *s)
+{
+	GTK_WIDGET_CLASS(diff_parent_class)->snapshot(w, s);
+	stick(GTK_TEXT_VIEW(w), s);
+}
+
+static void diff_class_init(DiffClass *c)
+{
+	GTK_WIDGET_CLASS(c)->snapshot = diff_snapshot;
+}
+
+static void diff_init(Diff *d)
+{
+}
+
+static gboolean click(GtkTextView *w, double x, double y)
 {
 	GtkTextBuffer *b = gtk_text_view_get_buffer(w);
+	Hunk *hunk = g_object_get_data(G_OBJECT(w), "hunk");
 	GtkTextIter a, c;
 	int l;
 	/* While lines are edited, a click only moves the cursor */
 	if (gtk_text_view_get_editable(w)) return FALSE;
-	if (ev->button == 1 && hit(w, ev, &a)) {
+	if (hit(w, x, y, &a)) {
 		fold(w, gtk_text_iter_get_line(&a), -1);
 		return TRUE;
 	}
-	if (ev->button == 1 && !gtk_text_buffer_get_selection_bounds(b, &a, &c)) {
-		l = line(w, ev, &a);
+	if (!gtk_text_buffer_get_selection_bounds(b, &a, &c)) {
+		l = line(w, x, y, &a);
 		if (gtk_text_iter_has_tag(&a, tag(b, "title"))) fold(w, l, -1);
 		else if (hunk && gtk_text_iter_get_char(&a) == '@') hunk(map(GTK_WIDGET(w), l), -1);
 	}
 	return FALSE;
 }
 
+/* The menu is the view's extra menu, filled again before each popup. The line under the pointer is for one menu only:
+ * a menu from the keyboard has no line. */
+static void popup(GtkTextView *w)
+{
+	GMenu *m = G_MENU(gtk_text_view_get_extra_menu(w));
+	g_menu_remove_all(m);
+	((Menu *)g_object_get_data(G_OBJECT(w), "menu"))(m, map(GTK_WIDGET(w), at));
+	at = one = -1;
+}
+
 /* Only a view with a menu keeps the line: the views share at and one. */
-static gboolean press(GtkTextView *w, GdkEventButton *ev, Menu *menu)
+static gboolean press(GtkTextView *w, int n, double x, double y)
 {
 	GtkTextIter a;
 	gunichar c;
-	if (ev->button == 1 && hit(w, ev, &a)) return TRUE;
-	if (ev->button == 3 && menu) {
-		one = at = line(w, ev, &a);
+	if (n == 1 && hit(w, x, y, &a)) return TRUE;
+	if (n == 3 && g_object_get_data(G_OBJECT(w), "menu")) {
+		one = at = line(w, x, y, &a);
 		c = gtk_text_iter_get_char(&a);
 		for (; at >= 0 && gtk_text_iter_get_char(&a) != '@'; gtk_text_iter_backward_line(&a))
 			at = gtk_text_iter_has_tag(&a, tag(gtk_text_view_get_buffer(w), "title")) ? -1 : at - 1;
 		if (at < 0 || (c != '+' && c != '-')) one = -1;
+		popup(w);
 	}
 	return FALSE;
 }
 
-/* The line under the pointer is for one menu only: a menu from the keyboard has no line. */
-static void popup(GtkTextView *w, GtkWidget *m, Menu *menu)
+/* Pointer use: a motion or a scroll ends a scroll to a file, a scroll or a press ends a place kept over a reload,
+ * a pointer only passing does not */
+static gboolean event(GtkEventController *ec, GdkEvent *ev)
 {
-	menu(GTK_MENU(m), map(GTK_WIDGET(w), at));
-	at = one = -1;
+	GtkTextView *w = GTK_TEXT_VIEW(gtk_event_controller_get_widget(ec));
+	GdkEventType t = gdk_event_get_event_type(ev);
+	guint k;
+	double x, y;
+	int n = 0;
+	if (t == GDK_BUTTON_PRESS || t == GDK_BUTTON_RELEASE) n = gdk_button_event_get_button(ev), local(GTK_WIDGET(w), ev, &x, &y);
+	if (t == GDK_BUTTON_RELEASE) return n == 1 && click(w, x, y);
+	if (t == GDK_BUTTON_PRESS && press(w, n, x, y)) return TRUE;
+	if (t == GDK_KEY_PRESS && g_object_get_data(G_OBJECT(w), "menu")) {
+		k = gdk_key_event_get_keyval(ev);
+		if (k == GDK_KEY_Menu || (k == GDK_KEY_F10 && gdk_event_get_modifier_state(ev) & GDK_SHIFT_MASK)) popup(w);
+	}
+	if (g_object_get_data(G_OBJECT(w), "top")) {
+		if (t == GDK_MOTION_NOTIFY || t == GDK_SCROLL) jump = 0;
+		if (t == GDK_SCROLL || t == GDK_BUTTON_PRESS) hold = 0;
+	}
+	return FALSE;
 }
 
 /* A place kept over a reload, as a scroll value: set at once, never scrolled to, which GTK animates. GTK measures a
@@ -245,25 +299,18 @@ static gboolean settle(GtkTextView *v)
 	return G_SOURCE_REMOVE;
 }
 
+static void aim(GtkTextView *v)
+{
+	GtkTextMark *g = gtk_text_buffer_get_mark(gtk_text_view_get_buffer(v), "goto");
+	if (g && jump) gtk_text_view_scroll_to_mark(v, g, 0, TRUE, 0, 0);
+}
+
 /* GTK measures a new text bit by bit, and a scroll cannot pass the height measured so far,
  * so the scroll to a file is done again each time the height changes. */
 static void grown(GtkAdjustment *a, GtkTextView *v)
 {
-	GtkTextMark *g = gtk_text_buffer_get_mark(gtk_text_view_get_buffer(v), "goto");
 	if (hold) gtk_adjustment_set_value(a, kept);
-	else if (g && jump) gtk_text_view_scroll_to_mark(v, g, 0, TRUE, 0, 0);
-}
-
-static gboolean used(void)
-{
-	return jump = 0;
-}
-
-/* A place kept over a reload holds until the user scrolls or clicks: a pointer only passing does not end it */
-static gboolean let(void)
-{
-	hold = 0;
-	return FALSE;
+	else aim(v);
 }
 
 static void all(GtkWidget *c, gpointer hide)
@@ -275,10 +322,11 @@ static void recolor(GtkTextBuffer *b);
 
 GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 {
-	GtkWidget *v = g_object_new(GTK_TYPE_TEXT_VIEW, "editable", FALSE, "cursor-visible", FALSE, "monospace", TRUE, "left-margin", MARGIN, "right-margin", MARGIN, "bottom-margin", MARGIN, NULL);
+	GtkWidget *v = g_object_new(diff_get_type(), "editable", FALSE, "cursor-visible", FALSE, "monospace", TRUE, "left-margin", MARGIN, "right-margin", MARGIN, "bottom-margin", MARGIN, NULL);
 	GtkWidget *s = scroll(v);
 	GtkTextBuffer *b = gtk_text_view_get_buffer(GTK_TEXT_VIEW(v));
 	PangoLayout *l;
+	GMenu *m;
 	char *t;
 	int i;
 	for (i = 0; i < 4; i++) gtk_text_buffer_create_tag(b, tags[i][0], "foreground", tags[i][1], NULL);
@@ -300,16 +348,15 @@ GtkWidget *diff_view(Hunk *hunk, Menu *menu, Top *top)
 	gtk_text_buffer_create_tag(b, "edit", "paragraph-background", "rgba(255,210,0,0.25)", "left-margin", MARGIN + i, NULL);
 	g_signal_connect(b, "changed", G_CALLBACK(recolor), 0);
 	g_object_set_data(G_OBJECT(b), "hide", gtk_text_buffer_create_tag(b, "hide", "invisible", TRUE, NULL));
-	g_signal_connect(v, "button-release-event", G_CALLBACK(click), hunk);
-	g_signal_connect(v, "button-press-event", G_CALLBACK(press), menu);
-	g_signal_connect_after(v, "draw", G_CALLBACK(stick), 0);
-	if (menu) g_signal_connect(v, "populate-popup", G_CALLBACK(popup), menu);
+	g_object_set_data(G_OBJECT(v), "hunk", hunk);
+	g_object_set_data(G_OBJECT(v), "menu", menu);
+	g_object_set_data(G_OBJECT(v), "top", top);
+	events(v, G_CALLBACK(event), 0);
+	if (menu) {
+		gtk_text_view_set_extra_menu(GTK_TEXT_VIEW(v), G_MENU_MODEL(m = g_menu_new()));
+		g_object_unref(m);
+	}
 	if (top) {
-		g_object_set_data(G_OBJECT(v), "top", top);
-		g_signal_connect(v, "motion-notify-event", G_CALLBACK(used), 0);
-		g_signal_connect(v, "scroll-event", G_CALLBACK(used), 0);
-		g_signal_connect(v, "scroll-event", G_CALLBACK(let), 0);
-		g_signal_connect(v, "button-press-event", G_CALLBACK(let), 0);
 		g_signal_connect(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(s)), "changed", G_CALLBACK(grown), v);
 		g_signal_connect(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(s)), "value-changed", G_CALLBACK(moved), v);
 	}
@@ -322,11 +369,11 @@ GtkWidget *diff_tools(GtkWidget *view)
 	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), *c;
 	int k;
 	for (k = 0; k < 2; k++) {
-		gtk_box_pack_start(GTK_BOX(b), c = gtk_button_new_with_label(name[k]), FALSE, FALSE, 0);
+		gtk_box_append(GTK_BOX(b), c = gtk_button_new_with_label(name[k]));
 		g_object_set_data(G_OBJECT(c), "view", view);
 		g_signal_connect(c, "clicked", G_CALLBACK(all), GINT_TO_POINTER(k));
 	}
-	gtk_box_pack_start(GTK_BOX(b), c = g_object_new(GTK_TYPE_LABEL, "ellipsize", PANGO_ELLIPSIZE_END, "xalign", 0., "use-markup", TRUE, NULL), TRUE, TRUE, 6);
+	gtk_box_append(GTK_BOX(b), c = g_object_new(GTK_TYPE_LABEL, "ellipsize", PANGO_ELLIPSIZE_END, "xalign", 0., "use-markup", TRUE, "hexpand", TRUE, "margin-start", 6, "margin-end", 6, NULL));
 	g_object_set_data(G_OBJECT(view), "sum", c);
 	return b;
 }
@@ -461,9 +508,9 @@ static void scroll_to(GtkWidget *view, int l)
 	GtkTextIter it;
 	gtk_text_buffer_get_iter_at_line(b, &it, l);
 	if ((g = gtk_text_buffer_get_mark(b, "goto"))) gtk_text_buffer_move_mark(b, g, &it);
-	else g = gtk_text_buffer_create_mark(b, "goto", &it, TRUE);
+	else gtk_text_buffer_create_mark(b, "goto", &it, TRUE);
 	jump = 1;
-	gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(view), g, 0, TRUE, 0, 0);
+	aim(GTK_TEXT_VIEW(view));
 }
 
 /* The scroll value before a reload, and back to it after */
