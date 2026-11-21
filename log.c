@@ -1,5 +1,6 @@
 
 #include <gtk/gtk.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,7 +17,7 @@ static GtkTextBuffer *info;
 static Row *row;
 static char *query, *seen;
 static GtkTreeModel *filter;
-static int nrow, cells, ncom, limit, pending, tagged, wip, again, busy;
+static int nrow, cells, ncom, limit, pending, tagged, wip, again, busy, cancelled;
 static const char title[] = "Uncommitted changes";
 static double x0;
 static const char sigs[] = "GUXYRBEN", *said[][2] = {
@@ -282,11 +283,11 @@ static void pick(GtkTreeSelection *s);
 static gboolean fetched(char *o)
 {
 	busy = 0;
-	if (o) {
-		alert(o);
-		free(o);
-		pick(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
-	} else stale(), load();
+	/* A fetch cancelled here says nothing: its message is only that it was stopped */
+	if (o && !cancelled) alert(o);
+	free(o), cancelled = 0;
+	if (o) pick(gtk_tree_view_get_selection(GTK_TREE_VIEW(list)));
+	else stale(), load();
 	return FALSE;
 }
 
@@ -302,19 +303,85 @@ static gpointer fetch(gpointer n)
 static void go(GtkWidget *b, GtkSpinButton *n)
 {
 	busy = 1;
-	g_object_set(b, "label", "Fetching…", "sensitive", FALSE, NULL);
+	g_object_set(b, "label", "Fetching…", "sensitive", FALSE, NULL), gtk_widget_set_visible(g_object_get_data(G_OBJECT(b), "cancel"), TRUE);
 	g_thread_unref(g_thread_new(0, fetch, GINT_TO_POINTER(gtk_spin_button_get_value_as_int(n))));
 }
 
+/* A fetch's lock, which git keeps while it deepens: from this window or another, or a gk started since */
+static char *lock(void)
+{
+	char *p;
+	if (git(&p, 0, (char *[]){"git", "rev-parse", "--git-path", "shallow.lock", 0})) return free(p), (char *)0;
+	return strtok(p, "\n") ? p : (free(p), (char *)0);
+}
+
+static int locked(void)
+{
+	char *p = lock();
+	int on = p && g_file_test(p, G_FILE_TEST_EXISTS);
+	free(p);
+	return on;
+}
+
+/* A fetch that runs here, as its working folder is gk's, the top of the work tree, stopped: git removes its lock and
+ * leaves the clone as it was */
+static void cancel(void)
+{
+	GDir *d = g_dir_open("/proc", 0, 0);
+	char *here = g_get_current_dir(), p[64], *t, *at, *name;
+	const char *n;
+	gsize len;
+	for (; d && (n = g_dir_read_name(d));) {
+		if (strspn(n, "0123456789") != strlen(n)) continue;
+		snprintf(p, sizeof p, "/proc/%s/cmdline", n);
+		if (!g_file_get_contents(p, &t, &len, 0)) continue;
+		snprintf(p, sizeof p, "/proc/%s/cwd", n);
+		name = strrchr(t, '/'), at = 0;
+		if (len > 10 && !strcmp(name ? name + 1 : t, "git") && strlen(t) + 1 < len && !strcmp(t + strlen(t) + 1, "fetch")
+			&& (at = g_file_read_link(p, 0)) && !strcmp(at, here))
+			kill(atoi(n), SIGTERM), cancelled = busy;
+		g_free(t), g_free(at);
+	}
+	if (d) g_dir_close(d);
+	g_free(here);
+}
+
+/* While a lock is there the log looks again each second; gone, the log is read again, as after a fetch of its own */
+static guint watching;
+
+/* The number of commits to fetch as last set, while gk runs: the row is made again at each reload */
+static int deeper = 5;
+
+static void counted(GtkSpinButton *n)
+{
+	deeper = gtk_spin_button_get_value_as_int(n);
+}
+
+static gboolean watch(gpointer data)
+{
+	if (locked()) return G_SOURCE_CONTINUE;
+	watching = 0;
+	if (!busy) stale(), load();
+	return G_SOURCE_REMOVE;
+}
+
+/* The words, the number and the button in one row, centred on one line: the words in the text stood on its baseline,
+ * below the widgets beside them. A fetch going on, from here or not, shows as one with Cancel beside it */
 static void deep(void)
 {
 	GtkTextBuffer *t = gtk_text_view_get_buffer(GTK_TEXT_VIEW(dv));
-	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), *n = gtk_spin_button_new_with_range(1, 1 << 30, 100), *f;
+	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6), *n = gtk_spin_button_new_with_range(1, 1 << 30, 1), *f, *c;
 	GtkTextIter it;
-	g_object_set(n, "value", 1000., NULL);
+	int on = busy || locked();
+	g_object_set(n, "value", (double)deeper, NULL), g_signal_connect(n, "value-changed", G_CALLBACK(counted), 0);
+	gtk_box_append(GTK_BOX(b), g_object_new(GTK_TYPE_LABEL, "label", "Fetch older commits:", "valign", GTK_ALIGN_CENTER, NULL));
 	gtk_box_append(GTK_BOX(b), n);
-	gtk_box_append(GTK_BOX(b), f = g_object_new(GTK_TYPE_BUTTON, "label", busy ? "Fetching…" : "Deepen", "sensitive", !busy, NULL));
+	gtk_box_append(GTK_BOX(b), f = g_object_new(GTK_TYPE_BUTTON, "label", on ? "Fetching…" : "Deepen", "sensitive", !on, NULL));
 	g_signal_connect(f, "clicked", G_CALLBACK(go), n);
+	gtk_box_append(GTK_BOX(b), c = g_object_new(GTK_TYPE_BUTTON, "label", "Cancel", "visible", on, NULL));
+	g_signal_connect_swapped(c, "clicked", G_CALLBACK(cancel), 0);
+	g_object_set_data(G_OBJECT(f), "cancel", c);
+	if (on && !watching) watching = g_timeout_add_seconds(1, watch, 0);
 	gtk_text_buffer_get_end_iter(t, &it);
 	gtk_text_view_add_child_at_anchor(GTK_TEXT_VIEW(dv), b, gtk_text_buffer_create_child_anchor(t, &it));
 }
@@ -334,7 +401,7 @@ static void pick(GtkTreeSelection *s)
 		gtk_text_buffer_set_text(info, "", 0);
 		put(title, -1, "bold");
 		git(&o, 0, (char *[]){"git", "diff", "--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", c, "HEAD", 0});
-		diff_files(dv, o);
+		g_object_set(dv, "top-margin", 0, NULL), diff_files(dv, o);
 	} else if (!git(&o, 0, (char *[]){"git", "show", "--format=%H%x00%P%x00%an <%ae>%x00%ai%x00%G?%x00%GS%x00%B%x00%N%x00",
 		"--no-color", "--no-ext-diff", "--default-prefix", "--submodule=short", c, "--diff-merges=first-parent",
 		/* The edge of a shallow clone would show its whole tree as added: in Linux that is 1.7 GB */
@@ -343,9 +410,11 @@ static void pick(GtkTreeSelection *s)
 		details(0, f, *f[4] && (p = strchr(sigs, *f[4])) ? p - sigs : 7);
 		if (*g_strchomp(f[7])) put("\nNotes\n", -1, "dim"), put(f[7], -1, "note");
 		while (*f[8] == '\n') f[8]++;
-		/* An edge commit has no diff: the diff view says why */
-		diff_files(dv, row[i].edge ? "The edge of a shallow clone: its parent is not here, so what it changed is not known.\n"
-			"Fetch older commits: " : f[8]);
+		/* An edge commit has no diff: the diff view says why, its text as far from the top as the details', which have no
+		 * file's title bar above them */
+		g_object_set(dv, "top-margin", row[i].edge ? 6 : 0, NULL);
+		diff_files(dv, row[i].edge ? "The edge of a shallow clone: its parent is not here, so what it changed is not known.\n\n"
+			: f[8]);
 		if (row[i].edge) deep();
 	}
 	free(o);
