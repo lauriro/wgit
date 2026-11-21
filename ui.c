@@ -129,7 +129,9 @@ static void dark(GVariant *v)
 		v = u;
 	}
 	if (g_variant_is_of_type(v, G_VARIANT_TYPE_UINT32))
-		g_object_set(gtk_settings_get_default(), "gtk-interface-color-scheme", g_variant_get_uint32(v) == 1 ? GTK_INTERFACE_COLOR_SCHEME_DARK : GTK_INTERFACE_COLOR_SCHEME_LIGHT, NULL);
+		/* The desktop theme's dark one by its own name: GTK 4 takes a named theme's dark part only by a setting it warns of,
+		 * and its own colour scheme set at all put its own theme in our theme's place */
+		g_object_set(gtk_settings_get_default(), "gtk-theme-name", g_variant_get_uint32(v) == 1 ? "Desk-dark" : "Desk", NULL);
 	g_variant_unref(v);
 }
 
@@ -182,7 +184,7 @@ static void switched(GtkStack *s)
 GtkWidget *tabs(GtkWidget *w, GtkWidget *tools)
 {
 	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0), *h = margin(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6)),
-		*x = g_object_new(GTK_TYPE_BUTTON, "icon-name", "window-close-symbolic", "has-frame", FALSE, "valign", GTK_ALIGN_CENTER, "focus-on-click", FALSE, NULL);
+		*x = g_object_new(GTK_TYPE_BUTTON, "icon-name", "window-close-symbolic", "has-frame", FALSE, "valign", GTK_ALIGN_CENTER, "focus-on-click", FALSE, "css-classes", (const char *[]){ "close", 0 }, NULL);
 	g_signal_connect_swapped(x, "clicked", G_CALLBACK(gtk_window_close), win);
 	gtk_box_append(GTK_BOX(h), tools);
 	gtk_box_append(GTK_BOX(h), g_object_new(GTK_TYPE_STACK_SWITCHER, "stack", stack, "hexpand", TRUE, "halign", GTK_ALIGN_END, NULL));
