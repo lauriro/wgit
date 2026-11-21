@@ -124,8 +124,16 @@ static void dirty(void)
 	gtk_tree_path_free(p);
 }
 
+/* A reload keeps the commit chosen, by its hash, as a deepen or a cancelled fetch reads the log again: the first row
+ * was chosen anew */
 static void load(void)
 {
+	GtkTreeSelection *s = gtk_tree_view_get_selection(GTK_TREE_VIEW(list));
+	GtkTreeModel *m;
+	GtkTreeIter it;
+	char *keep = 0;
+	int i;
+	if (gtk_tree_selection_get_selected(s, &m, &it) && (gtk_tree_model_get(m, &it, 1, &i, -1), i >= 0)) keep = g_strdup(row[i].full);
 	gtk_tree_view_set_model(GTK_TREE_VIEW(list), 0);
 	gtk_list_store_clear(store);
 	ncom = wip = 0;
@@ -133,6 +141,16 @@ static void load(void)
 	row = history(&nrow, limit = PAGE);
 	fill(0);
 	gtk_tree_view_set_model(GTK_TREE_VIEW(list), filter);
+	if (keep && gtk_tree_model_get_iter_first(filter, &it))
+		do {
+			gtk_tree_model_get(filter, &it, 1, &i, -1);
+			if (i >= 0 && !strcmp(row[i].full, keep)) {
+				GtkTreePath *p = gtk_tree_model_get_path(filter, &it);
+				gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), p, 0, FALSE), gtk_tree_path_free(p);
+				break;
+			}
+		} while (gtk_tree_model_iter_next(filter, &it));
+	g_free(keep);
 	dirty();
 }
 
