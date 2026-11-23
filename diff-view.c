@@ -69,10 +69,26 @@ static void arrow(GtkTextView *v, GtkTextIter *it, int closed)
 	g_object_unref(i);
 }
 
+/* GTK's diff of two frames missed parts of the lines a fold took away, on any renderer: they stayed on the screen until
+ * the compositor drew the window again. A widget's opacity changed is no diff but the whole widget: for a second after
+ * a fold, the window's child takes another at each frame, one no eye sees, and each frame repaints the window whole */
+static gint64 whole;
+static int flashing;
+
+static gboolean flash(GtkWidget *w, GdkFrameClock *c, gpointer d)
+{
+	flashing = gdk_frame_clock_get_frame_time(c) < whole;
+	gtk_widget_set_opacity(w, flashing ? (gtk_widget_get_opacity(w) < .995 ? 254 : 253) / 255. : 1);
+	return flashing;
+}
+
 static void fold(GtkTextView *v, int l, int hide)
 {
 	GtkTextBuffer *b = gtk_text_view_get_buffer(v);
+	GtkRoot *r = gtk_widget_get_root(GTK_WIDGET(v));
 	GtkTextIter s, e;
+	whole = g_get_monotonic_time() + G_USEC_PER_SEC;
+	if (!flashing && GTK_IS_WINDOW(r)) flashing = 1, gtk_widget_add_tick_callback(gtk_window_get_child(GTK_WINDOW(r)), flash, 0, 0);
 	gtk_text_buffer_get_iter_at_line(b, &s, l + 1);
 	e = s;
 	gtk_text_iter_forward_to_tag_toggle(&e, tag(b, "title"));
