@@ -184,7 +184,7 @@ static void switched(GtkStack *s)
 GtkWidget *tabs(GtkWidget *w, GtkWidget *tools)
 {
 	GtkWidget *b = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0), *h = margin(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6)),
-		*x = g_object_new(GTK_TYPE_BUTTON, "icon-name", "window-close-symbolic", "has-frame", FALSE, "valign", GTK_ALIGN_CENTER, "focus-on-click", FALSE, "css-classes", (const char *[]){ "close", 0 }, NULL);
+		*x = g_object_new(GTK_TYPE_BUTTON, "icon-name", "window-close-symbolic", "valign", GTK_ALIGN_CENTER, "focus-on-click", FALSE, "css-classes", (const char *[]){ "close", 0 }, NULL);
 	g_signal_connect_swapped(x, "clicked", G_CALLBACK(gtk_window_close), win);
 	gtk_box_append(GTK_BOX(h), tools);
 	gtk_box_append(GTK_BOX(h), g_object_new(GTK_TYPE_STACK_SWITCHER, "stack", stack, "hexpand", TRUE, "halign", GTK_ALIGN_END, NULL));
